@@ -364,6 +364,9 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 		const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(
 			this._context.extensionUri, 'media', 'pawDraw.css'));
 
+		const robotPngUri = webview.asWebviewUri(vscode.Uri.joinPath(
+			this._context.extensionUri, 'media', 'robot.png'));
+
 		// Use a nonce to whitelist which scripts can be run
 		const nonce = getNonce();
 
@@ -386,6 +389,9 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 		<title>Paw Draw</title>
 		</head>
 		<body>
+		<img class="robot"
+     src="${robotPngUri}"
+     alt="robor">
 		<div class="drawing-canvas"></div>
 		${""
 			// <div class="drawing-controls">

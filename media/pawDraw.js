@@ -182,9 +182,9 @@
 
     /**
      * @param {Uint8Array | undefined} data
-     * @param {Array<Stroke> | undefined} strokes
-     */
-    async reset(data, strokes = []) {
+    */
+    //  * @param {Array<Stroke> | undefined} strokes
+    async reset(data, /* strokes = [] */) {
       if (data) {
         const img = await loadImageFromData(data);
         this.initialCanvas.width /* = this.drawingCanvas.width */ = img.naturalWidth;
@@ -259,10 +259,11 @@
         // }
       }
       case "update": {
-        const strokes = body.edits.map(
-          (edit) => new Stroke(edit.color, edit.stroke)
-        );
-        await editor.reset(body.content, strokes);
+        // const strokes = body.edits.map(
+        //   (edit) => new Stroke(edit.color, edit.stroke)
+        // );
+        // await editor.reset(body.content, strokes);
+
         return;
       }
       case "getFileData": {
