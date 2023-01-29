@@ -300,17 +300,17 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 
 		// Wait for the webview to be properly ready before we init
 		webviewPanel.webview.onDidReceiveMessage(async e => {
-			const fieldUri = vscode.Uri.joinPath(
-				this._context.extensionUri,
-				"media",
-				"SpinUpField.png"
-			);
-			const fieldData = new Uint8Array(await vscode.workspace.fs.readFile(fieldUri));
+			// const fieldUri = vscode.Uri.joinPath(
+			// 	this._context.extensionUri,
+			// 	"media",
+			// 	"SpinUpField.png"
+			// );
+			// const fieldData = new Uint8Array(await vscode.workspace.fs.readFile(fieldUri));
 			if (e.type === 'ready') {
 				if (document.uri.scheme === 'untitled') {
 					this.postMessage(webviewPanel, 'init', {
 						untitled: true,
-						data: fieldData,
+						// data: fieldData,
 						editable: true,
 					});
 				} else {
@@ -318,7 +318,7 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 
 					this.postMessage(webviewPanel, 'init', {
 						value: document.documentData,
-						data: fieldData,
+						// data: fieldData,
 						editable,
 					});
 				}
@@ -389,11 +389,16 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 		<title>Paw Draw</title>
 		</head>
 		<body>
-		<img class="robot"
-     src="${robotPngUri}"
-     alt="robor">
-		<div class="drawing-canvas"></div>
-		${""
+		<div class="field">
+			<p class="robot"> </p>
+		</div>
+${""
+			// <img class="robot"
+			//  src="${robotPngUri}"
+			//  alt="robor">
+			}
+	${""
+			//<div class="drawing-canvas"></div>
 			// <div class="drawing-controls">
 			// 	<button data-color="black" class="black active" title="Black"></button>
 			// 	<button data-color="white" class="white" title="White"></button>

@@ -50,7 +50,11 @@
 
       this.editable = false;
 
-      this.drawingColor = "black";
+      this.robot = document.querySelector(".robot");
+      if (!this.robot) throw "no robot";
+      this.field = document.querySelector(".field");
+      if (!this.field) throw "no field";
+      // this.drawingColor = "black";
 
       // /** @type {Array<Stroke>} */
       // this.strokes = [];
@@ -88,7 +92,61 @@
       }
     }
 
+    getRobotPosition() {
+      let getHeading = (el) => {
+        const transformValues = window
+          .getComputedStyle(el)
+          .getPropertyValue("transform")
+          .split("(")[1]
+          .split(")")[0]
+          .split(",");
+        // console.log(transformValues);
+        // const rotation =
+        //   Math.round(
+        //     Math.atan2(
+        //       parseFloat(transformValues[1]),
+        //       parseFloat(transformValues[0])
+        //     )
+        //   ) *
+        //   (180 / Math.PI);
+        // const rotation = Math.round(
+        //   Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI)
+        // );
+        return Math.round(
+          Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI)
+        );
+      };
+      const fieldLength = 2 * 6 * 12; // field length in inches
+
+      const fieldBounds = this.field.getBoundingClientRect();
+      const robotBounds = this.robot.getBoundingClientRect();
+
+      let pos = {
+        heading: getHeading(this.robot),
+        x: (robotBounds.x - fieldBounds.x) / (fieldBounds.width / fieldLength),
+        y:
+          (fieldBounds.bottom - robotBounds.bottom) /
+          (fieldBounds.height / fieldLength),
+      };
+      console.log(pos);
+      return pos;
+    }
+
+    setRobotPosition(
+      /** @type {{heading: number, x: Number, y: number}} */ pos
+    ) {
+      const fieldLength = 2 * 6 * 12; // field length in inches
+
+      const fieldBounds = this.field.getBoundingClientRect();
+      const robotBounds = this.robot.getBoundingClientRect();
+
+      // this.robot.style.transform = `translate(${pos.y
+      //   *(fieldBounds.width / fieldLength)
+      // )})`;
+    }
+
     _initElements(/** @type {HTMLElement} */ parent) {
+      this.robot.addEventListener("click", () => this.getRobotPosition());
       // const colorButtons = /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('.drawing-controls button'));
       // for (const colorButton of colorButtons) {
       // 	colorButton.addEventListener('click', e => {
@@ -98,14 +156,19 @@
       // 		this.drawingColor = colorButton.dataset['color'];
       // 	});
       // }
+      // Array.from(document.styleSheets)
+      // const field = document.querySelector(".field");
+      // if (field) {
+      //   field.style.height = "100%";
+      //   field.style.height = "100%";
+      // }
+      // this.wrapper = document.createElement("div");
+      // this.wrapper.style.position = "relative";
+      // parent.append(this.wrapper);
 
-      this.wrapper = document.createElement("div");
-      this.wrapper.style.position = "relative";
-      parent.append(this.wrapper);
-
-      this.initialCanvas = document.createElement("canvas");
-      this.initialCtx = this.initialCanvas.getContext("2d");
-      this.wrapper.append(this.initialCanvas);
+      // this.initialCanvas = document.createElement("canvas");
+      // this.initialCtx = this.initialCanvas.getContext("2d");
+      // this.wrapper.append(this.initialCanvas);
 
       // this.drawingCanvas = document.createElement("canvas");
       // this.drawingCanvas.style.position = "absolute";
@@ -182,18 +245,17 @@
 
     /**
      * @param {Uint8Array | undefined} data
-    */
+     */
     //  * @param {Array<Stroke> | undefined} strokes
-    async reset(data, /* strokes = [] */) {
-      if (data) {
-        const img = await loadImageFromData(data);
-        this.initialCanvas.width /* = this.drawingCanvas.width */ = img.naturalWidth;
-        this.initialCanvas.height /* = this.drawingCanvas.height */ =
-          img.naturalHeight;
-        this.initialCtx.drawImage(img, 0, 0);
-        this.ready = true;
-      }
-
+    async reset(data /* strokes = [] */) {
+      // if (data) {
+      //   const img = await loadImageFromData(data);
+      //   this.initialCanvas.width /* = this.drawingCanvas.width */ = img.naturalWidth;
+      //   this.initialCanvas.height /* = this.drawingCanvas.height */ =
+      //     img.naturalHeight;
+      //   this.initialCtx.drawImage(img, 0, 0);
+      //   this.ready = true;
+      // }
       // this.strokes = strokes;
       // this._redraw();
     }
@@ -233,10 +295,11 @@
       //   outCanvas.toBlob(resolve, "image/png");
       // });
 
-      return /*new Uint8Array( await blob.arrayBuffer() )*/"get troller";
+      return /*new Uint8Array( await blob.arrayBuffer() )*/ "get troller";
     }
   }
 
+  // @ts-ignore
   const editor = new PawDrawEditor(document.querySelector(".drawing-canvas"));
 
   // Handle messages from the extension
@@ -245,15 +308,12 @@
     switch (type) {
       case "init": {
         editor.setEditable(body.editable);
-        await editor.reset(
-          body.data
-        );
+        await editor.reset(body.data);
         // if (body.untitled) {
         //   await editor.resetUntitled();
         //   return;
         // } else {
         //   // Load the initial image into the canvas.\
-
 
         //   return;
         // }

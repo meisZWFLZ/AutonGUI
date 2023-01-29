@@ -1,26 +1,66 @@
-html, body {
-	height: 100%;
+html,
+body {
+  height: 100%;
 }
 
-.drawing-canvas {
-	width: 100%;
-	height: 100%;
-	flex: 1;
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	background-repeat: repeat;
-	flex-direction: column;
+/* .drawing-canvas {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-repeat: repeat;
+  flex-direction: column;
 }
+ */
+.field {
+  aspect-ratio: 1 / 1;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+
+  display: flex;
+  justify-content: left;
+  align-items: end;
+
+  background-image: url("./SpinUpField.png");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: contain;
+}
+
+/* .field:after {
+  content: "";
+  display: block;
+  padding-right: 100%;
+} */
 .robot {
-	position: fixed;
+  aspect-ratio: 1 / 1;
+  width: 12.5%;
+  height: 12.5%;
+  position: relative;
+  transform: translate(100%, -100%) rotate(90deg);
+  background-image: url("./robot.svg");
+  background-repeat: no-repeat;
+  /* background-position: center; */
+  background-size: 100% 100%;
+  z-index: 100;
+}
+/* .robot:after {
+  content: "";
+  display: block;
+  padding-bottom: 100%;
+} */
+
+/* 	position: fixed;
 	width: 100px;
 	height: 100px;
 	right:50%;
 	bottom: 50%;
 	z-index:100;
-}
-
+ */
+/*
 .drawing-controls {
 	position: fixed;
 	bottom: 0;
@@ -62,7 +102,7 @@ html, body {
 }
 
 .drawing-controls button:before {
-	-webkit-mask: url("./paw-color.svg") no-repeat 50% 50%;
+	-webkit-mask: url("./paw-color.svg")  no-repeat 50% 50%;
 }
 
 .drawing-controls button:after {
@@ -88,4 +128,4 @@ html, body {
 
 .drawing-controls button.blue:before {
 	background-color: blue;
-}
+} */
