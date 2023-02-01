@@ -11,7 +11,9 @@ import { getNonce } from './util';
 // }
 
 interface AutonP2PEdit {
-	readonly point: ReadonlyArray<[number, number]>;
+	readonly x: number;
+	readonly y: number;
+	readonly heading: number;
 }
 
 interface PawDrawDocumentDelegate {

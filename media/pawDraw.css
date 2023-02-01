@@ -40,7 +40,7 @@ body {
   width: 12.5%;
   height: 12.5%;
   position: relative;
-  transform: translate(100%, -100%) rotate(90deg);
+  /* transform: translate(100%, -100%) rotate(90deg); */
   background-image: url("./robot.svg");
   background-repeat: no-repeat;
   /* background-position: center; */

@@ -55,9 +55,9 @@ class PawDrawEditor {
     this.field = document.querySelector(".field");
     if (!this.field) throw "no field";
 
-    this.robotPos = this.getRobotPosition();
+    this.robotPos = { x: 0, y: 0, heading: 0 };
     // this.drawingColor = "black";
-    console.log(this.getRobotPosition());
+    console.log(this.robotPos);
     // /** @type {Array<Stroke>} */
     // this.strokes = [];
 
@@ -111,8 +111,8 @@ class PawDrawEditor {
     pos.x /= fieldBounds.width / fieldLength;
     pos.y /= fieldBounds.height / fieldLength;
 
-    pos.x = Math.round(pos.x/3)*3;
-    pos.y = Math.round(pos.y/3)*3;
+    pos.x = Math.round(pos.x / 3) * 3;
+    pos.y = Math.round(pos.y / 3) * 3;
 
     // console.log(pos);
     return pos;
@@ -123,27 +123,31 @@ class PawDrawEditor {
    */
   getRobotPosition() {
     let getHeading = (el) => {
-      const transformValues = window
-        .getComputedStyle(el)
-        .getPropertyValue("transform")
-        .split("(")[1]
-        .split(")")[0]
-        .split(",");
-      console.log(transformValues);
-      // const rotation =
-      //   Math.round(
-      //     Math.atan2(
-      //       parseFloat(transformValues[1]),
-      //       parseFloat(transformValues[0])
-      //     )
-      //   ) *
-      //   (180 / Math.PI);
-      // const rotation = Math.round(
-      //   Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI)
-      // );
-      return Math.round(
-        Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI)
-      );
+      try {
+        const transformValues = window
+          .getComputedStyle(el)
+          .getPropertyValue("transform")
+          .split("(")[1]
+          .split(")")[0]
+          .split(",");
+        console.log(transformValues);
+        // const rotation =
+        //   Math.round(
+        //     Math.atan2(
+        //       parseFloat(transformValues[1]),
+        //       parseFloat(transformValues[0])
+        //     )
+        //   ) *
+        //   (180 / Math.PI);
+        // const rotation = Math.round(
+        //   Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI)
+        // );
+        return Math.round(
+          Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI)
+        );
+      } catch {
+        return 0;
+      }
     };
     // const fieldLength = 2 * 6 * 12; // field length in inches
 
@@ -182,10 +186,19 @@ class PawDrawEditor {
 
     const fieldBounds = this.field.getBoundingClientRect();
     const robotBounds = this.robot.getBoundingClientRect();
+    
+    if (pos !==)
 
     this.robotPos.x = pos.x;
     this.robotPos.y = pos.y;
     if (pos.heading) this.robotPos.heading = pos.heading;
+
+    		vscode.postMessage({
+    			type: 'stroke',
+x: this.robotPos.x,
+y: this.robotPos.y,
+heading: this.robotPos.heading
+    		});
 
     return (this.robot.style.transform = `translate(${
       (pos.x || this.robotPos.x) * (fieldBounds.width / fieldLength) -
@@ -209,6 +222,10 @@ class PawDrawEditor {
         () => document.removeEventListener("mousemove", mouseMoveListener),
         { once: true }
       );
+    });
+    window.addEventListener("resize", () => {
+      this.setRobotPosition(this.robotPos);
+      console.log("resize");
     });
 
     // const colorButtons = /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('.drawing-controls button'));
@@ -307,11 +324,11 @@ class PawDrawEditor {
   //   // }
   // }
 
-  /**
-   * @param {Uint8Array | undefined} data
-   */
-  //  * @param {Array<Stroke> | undefined} strokes
-  async reset(data /* strokes = [] */) {
+  // /**
+  //  * @param {Uint8Array | undefined} data
+  //  */
+  // //  * @param {Array<Stroke> | undefined} strokes
+  /* async */ reset(data /* strokes = [] */) {
     // if (data) {
     //   const img = await loadImageFromData(data);
     //   this.initialCanvas.width /* = this.drawingCanvas.width */ = img.naturalWidth;
@@ -322,6 +339,11 @@ class PawDrawEditor {
     // }
     // this.strokes = strokes;
     // this._redraw();
+    // let str = data.map(String.fromCharCode).join("");
+    let str = String.fromCharCode.apply(null, data);
+    console.log(str);
+    this.robotPos = JSON.parse(str);
+    this.setRobotPosition(this.robotPos);
   }
 
   // /**
@@ -359,7 +381,9 @@ class PawDrawEditor {
     //   outCanvas.toBlob(resolve, "image/png");
     // });
 
-    return /*new Uint8Array( await blob.arrayBuffer() )*/ "get troller";
+    return Array.from(JSON.stringify(this.robotPos)).map((e) =>
+      e.charCodeAt(0)
+    );
   }
 }
 
@@ -372,7 +396,8 @@ window.addEventListener("message", async (e) => {
   switch (type) {
     case "init": {
       editor.setEditable(body.editable);
-      await editor.reset(body.data);
+      console.log(body);
+      /* await */ editor.reset(body.value);
       // if (body.untitled) {
       //   await editor.resetUntitled();
       //   return;
@@ -387,6 +412,7 @@ window.addEventListener("message", async (e) => {
       //   (edit) => new Stroke(edit.color, edit.stroke)
       // );
       // await editor.reset(body.content, strokes);
+       editor.reset(body.content);
 
       return;
     }
