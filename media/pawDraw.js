@@ -56,6 +56,10 @@ class PawDrawEditor {
     if (!this.field) throw "no field";
 
     this.robotPos = { x: 0, y: 0, heading: 0 };
+
+    this.robotHeight = this.robot.getBoundingClientRect().height;
+    this.robotWidth = this.robot.getBoundingClientRect().width;
+
     // this.drawingColor = "black";
     console.log(this.robotPos);
     // /** @type {Array<Stroke>} */
@@ -111,11 +115,21 @@ class PawDrawEditor {
     pos.x /= fieldBounds.width / fieldLength;
     pos.y /= fieldBounds.height / fieldLength;
 
-    pos.x = Math.round(pos.x / 3) * 3;
-    pos.y = Math.round(pos.y / 3) * 3;
+    // pos.x = Math.round(pos.x / 3) * 3;
+    // pos.y = Math.round(pos.y / 3) * 3;
 
     // console.log(pos);
     return pos;
+  }
+  /**
+   * @returns {{x: number, y: number}};
+   */
+  getRobotAbsoluteCenter() {
+    const robotBounds = this.robot.getBoundingClientRect();
+    return {
+      x: this.robotWidth / 2 + robotBounds.left,
+      y: robotBounds.top + this.robotHeight / 2,
+    };
   }
 
   /**
@@ -167,10 +181,10 @@ class PawDrawEditor {
 
     // console.log(pos);
     // return pos;
-    const robotCenter = {
-      x: robotBounds.width / 2 + robotBounds.left,
-      y: robotBounds.top + robotBounds.height / 2,
-    };
+    const robotCenter = this.getRobotAbsoluteCenter(); /* = {
+      x: this.robotWidth / 2 + robotBounds.left,
+      y: robotBounds.top + this.robotHeight / 2,
+    }; */
     let pos = {
       ...this.getLocalFieldPos(robotCenter),
       heading: getHeading(this.robot),
@@ -180,52 +194,168 @@ class PawDrawEditor {
   }
 
   setRobotPosition(
-    /** @type {{heading?: number, x: number, y: number}} */ pos
+    /** @type {{heading?: number, x: number, y: number}} */ pos,
+    /** @type {{duration?: number}} */ opts
   ) {
+    if (
+      (!pos.x || pos.x == this.robotPos.x) &&
+      (!pos.y || pos.y == this.robotPos.y) &&
+      (!pos.heading || pos.heading == this.robotPos.heading)
+    )
+      throw "no change in robot positon";
+
+    console.log({ pos, robot: this.robotPos });
     const fieldLength = 2 * 6 * 12; // field length in inches
 
     const fieldBounds = this.field.getBoundingClientRect();
     const robotBounds = this.robot.getBoundingClientRect();
-    
-    if (pos !==)
 
-    this.robotPos.x = pos.x;
-    this.robotPos.y = pos.y;
+    if (pos.x) this.robotPos.x = pos.x;
+    if (pos.y) this.robotPos.y = pos.y;
     if (pos.heading) this.robotPos.heading = pos.heading;
 
-    		vscode.postMessage({
-    			type: 'stroke',
-x: this.robotPos.x,
-y: this.robotPos.y,
-heading: this.robotPos.heading
-    		});
-
+    // if (!opts || !opts.editFin) {
+    //   vscode.postMessage({
+    //     type: "stroke",
+    //     x: this.robotPos.x,
+    //     y: this.robotPos.y,
+    //     heading: this.robotPos.heading,
+    //   });
+    // }
+    this.robot.animate(
+      [
+        { transform: this.robot.style.transform },
+        {
+          transform: `translate(${
+            this.robotPos.x * (fieldBounds.width / fieldLength) -
+            this.robotWidth / 2
+          }px, ${
+            -this.robotPos.y * (fieldBounds.height / fieldLength) +
+            this.robotHeight / 2
+          }px)rotate(${this.robotPos.heading}deg)`,
+        },
+      ],
+      { duration: (opts ? opts.duration : 0) || 200 }
+    );
     return (this.robot.style.transform = `translate(${
-      (pos.x || this.robotPos.x) * (fieldBounds.width / fieldLength) -
-      robotBounds.width / 2
+      /* pos.x ||  */ this.robotPos.x * (fieldBounds.width / fieldLength) -
+      /* robotBounds.width */
+      this.robotWidth / 2
     }px, ${
-      -(pos.y || this.robotPos.y) * (fieldBounds.height / fieldLength) +
-      robotBounds.height / 2
-    }px)rotate(${pos.heading || this.robotPos.heading}deg)`);
+      -(/* pos.y ||  */ this.robotPos.y) * (fieldBounds.height / fieldLength) +
+      /* robotBounds.height */ this.robotHeight / 2
+    }px)rotate(${/* pos.heading || */ this.robotPos.heading}deg)`);
+  }
+
+  updateRobotPosition() {
+    vscode.postMessage({
+      type: "stroke",
+      x: this.robotPos.x,
+      y: this.robotPos.y,
+      heading: this.robotPos.heading,
+    });
   }
 
   _initElements(/** @type {HTMLElement} */ parent) {
-    // this.robot.addEventListener("click", () => this.getRobotPosition());
     let mouseMoveListener = ({ clientX: x, clientY: y }) => {
-      this.setRobotPosition(this.getLocalFieldPos({ x, y }));
-      console.log("fsdjfsdfklsd\n");
+      try {
+        this.setRobotPosition(this.getLocalFieldPos({ x, y }));
+      } catch {}
     };
-    this.robot.addEventListener("mousedown", () => {
-      document.addEventListener("mousemove", mouseMoveListener);
-      document.addEventListener(
-        "mouseup",
-        () => document.removeEventListener("mousemove", mouseMoveListener),
-        { once: true }
-      );
+    let mouseRotateListener = ({ clientX: x, clientY: y }) => {
+      const robotCenter = this.getRobotAbsoluteCenter();
+      // console.log({ x, y });
+      try {
+        this.setRobotPosition({
+          ...this.robotPos,
+          heading:
+            // Math.round(
+            Math.atan2(x - robotCenter.x, robotCenter.y - y) * (180 / Math.PI),
+          //   /  10
+          // ) * 10,
+        });
+      } catch {}
+    };
+    this.robot.addEventListener("mousedown", (ev) => {
+      // @ts-ignore
+      if (!ev.altKey) {
+        // case 0: //primary (left)
+        document.addEventListener("mousemove", mouseMoveListener);
+        document.addEventListener(
+          "mouseup",
+          () => {
+            this.updateRobotPosition();
+            document.removeEventListener("mousemove", mouseMoveListener);
+          },
+          { once: true }
+        );
+        return;
+      } else {
+        // case 2: // secondary (right)
+        document.addEventListener("mousemove", mouseRotateListener);
+        document.addEventListener(
+          "mouseup",
+          () => {
+            this.updateRobotPosition();
+            document.removeEventListener("mousemove", mouseRotateListener);
+          },
+          { once: true }
+        );
+        return;
+      }
     });
     window.addEventListener("resize", () => {
       this.setRobotPosition(this.robotPos);
       console.log("resize");
+    });
+
+    window.addEventListener("keydown", (ev) => {
+      if (!ev.ctrlKey && !ev.altKey) {
+        console.log(ev);
+        // for moving
+        let dir = null;
+        switch (ev.key.toLowerCase()) {
+          case "r":
+            return this.setRobotPosition({
+              ...this.robotPos,
+              heading: (this.robotPos.heading + (ev.shiftKey ? 90 : -90)) % 360,
+            });
+          case "arrowup":
+          case "w":
+            dir = { x: 0, y: 1 };
+          case "arrowdown":
+          case "s":
+            if (!dir) dir = { x: 0, y: -1 };
+          case "arrowleft":
+          case "a":
+            if (!dir) dir = { x: -1, y: 0 };
+          case "arrowright":
+          case "d":
+            if (!dir) dir = { x: 1, y: 0 };
+            return this.setRobotPosition({
+              ...this.robotPos,
+              x: this.robotPos.x + 3 * dir.x,
+              y: this.robotPos.y + 3 * dir.y,
+            });
+        }
+      }
+    });
+    console.log("keyup");
+    window.addEventListener("keyup", (ev) => {
+      console.log(ev);
+      switch (ev.key.toLowerCase()) {
+        case "r":
+        case "arrowup":
+        case "w":
+        case "arrowdown":
+        case "s":
+        case "arrowleft":
+        case "a":
+        case "arrowright":
+        case "d":
+          this.updateRobotPosition();
+          break;
+      }
     });
 
     // const colorButtons = /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('.drawing-controls button'));
@@ -328,7 +458,7 @@ heading: this.robotPos.heading
   //  * @param {Uint8Array | undefined} data
   //  */
   // //  * @param {Array<Stroke> | undefined} strokes
-  /* async */ reset(data /* strokes = [] */) {
+  /* async */ reset(/** @type {{heading: number, x: number, y: number}}*/ pos) {
     // if (data) {
     //   const img = await loadImageFromData(data);
     //   this.initialCanvas.width /* = this.drawingCanvas.width */ = img.naturalWidth;
@@ -340,10 +470,7 @@ heading: this.robotPos.heading
     // this.strokes = strokes;
     // this._redraw();
     // let str = data.map(String.fromCharCode).join("");
-    let str = String.fromCharCode.apply(null, data);
-    console.log(str);
-    this.robotPos = JSON.parse(str);
-    this.setRobotPosition(this.robotPos);
+    this.setRobotPosition(pos);
   }
 
   // /**
@@ -393,29 +520,39 @@ const editor = new PawDrawEditor(document.querySelector(".drawing-canvas"));
 // Handle messages from the extension
 window.addEventListener("message", async (e) => {
   const { type, body, requestId } = e.data;
+
   switch (type) {
+    case "update": {
+      // const strokes = body.edits.map(
+      //   (edit) => new Stroke(edit.color, edit.stroke)
+      // );
+      // await editor.reset(body.content, strokes);
+
+      console.log(body);
+
+      // editor.reset(body.edits[body.edits.length]);
+
+      if (body.edits.length)
+        return editor.reset(body.edits[body.edits.length - 1]);
+      body.value = body.content;
+    }
     case "init": {
       editor.setEditable(body.editable);
       console.log(body);
-      /* await */ editor.reset(body.value);
+      let str = String.fromCharCode.apply(null, body.value);
+      console.log(str);
+      editor.reset(JSON.parse(str));
+      editor.updateRobotPosition();
       // if (body.untitled) {
       //   await editor.resetUntitled();
       //   return;
       // } else {
       //   // Load the initial image into the canvas.\
 
-      //   return;
+      return;
       // }
     }
-    case "update": {
-      // const strokes = body.edits.map(
-      //   (edit) => new Stroke(edit.color, edit.stroke)
-      // );
-      // await editor.reset(body.content, strokes);
-       editor.reset(body.content);
 
-      return;
-    }
     case "getFileData": {
       // Get the image data for the canvas and post it back to the extension.
       editor.getImageData().then((data) => {
