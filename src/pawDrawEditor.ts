@@ -109,7 +109,7 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
 	 * This fires an event to notify VS Code that the document has been edited.
 	 */
 	makeEdit(edit: AutonP2PEdit) {
-
+		this._edits.push(edit);
 		this._onDidChange.fire({
 			label: 'Stroke',
 			undo: async () => {
