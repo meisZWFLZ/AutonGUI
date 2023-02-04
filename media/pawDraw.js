@@ -57,11 +57,9 @@ class PawDrawEditor {
 
     this.robotPos = { x: 0, y: 0, heading: 0 };
 
-    // they are the same, but in future, might be different to accomadate custom robot dimensions
     this.robotHeight = this.robot.getBoundingClientRect().height;
     this.robotWidth = this.robot.getBoundingClientRect().width;
 
-    this.startPos = null;
     // this.drawingColor = "black";
     console.log(this.robotPos);
     // /** @type {Array<Stroke>} */
@@ -129,8 +127,8 @@ class PawDrawEditor {
   getRobotAbsoluteCenter() {
     const robotBounds = this.robot.getBoundingClientRect();
     return {
-      x: this.robot.offsetWidth / 2 + robotBounds.left,
-      y: robotBounds.top + this.robot.offsetHeight / 2,
+      x: this.robotWidth / 2 + robotBounds.left,
+      y: robotBounds.top + this.robotHeight / 2,
     };
   }
 
@@ -184,8 +182,8 @@ class PawDrawEditor {
     // console.log(pos);
     // return pos;
     const robotCenter = this.getRobotAbsoluteCenter(); /* = {
-      x: this.robot.offsetWidth / 2 + robotBounds.left,
-      y: robotBounds.top + this.robot.offsetHeight / 2,
+      x: this.robotWidth / 2 + robotBounds.left,
+      y: robotBounds.top + this.robotHeight / 2,
     }; */
     let pos = {
       ...this.getLocalFieldPos(robotCenter),
@@ -196,54 +194,26 @@ class PawDrawEditor {
   }
 
   setRobotPosition(
-    /** @type {{heading?: number, x?: number, y?: number}} */ pos,
-    /** @type {{duration?: number, check: boolean}} */ opts = {
-      duration: 200,
-      check: true,
-    }
+    /** @type {{heading?: number, x: number, y: number}} */ pos,
+    /** @type {{duration?: number}} */ opts
   ) {
     if (
-      opts.check &&
-      (pos.x == undefined || pos.x == this.robotPos.x) &&
-      (pos.y == undefined || pos.y == this.robotPos.y) &&
-      (pos.heading == undefined || pos.heading == this.robotPos.heading)
+      (!pos.x || pos.x == this.robotPos.x) &&
+      (!pos.y || pos.y == this.robotPos.y) &&
+      (!pos.heading || pos.heading == this.robotPos.heading)
     )
       throw "no change in robot positon";
 
-    // pos.x = Math.max(widthHalf, Math.min(pos.x, fieldBounds.width - widthHalf));
-    // pos.y =
-    //  console.log({ pos: { ...pos }, robot: { ...this.robotPos } });
-
+    console.log({ pos, robot: this.robotPos });
     const fieldLength = 2 * 6 * 12; // field length in inches
 
     const fieldBounds = this.field.getBoundingClientRect();
     const robotBounds = this.robot.getBoundingClientRect();
 
-    if (pos.heading != undefined) this.robotPos.heading = pos.heading;
+    if (pos.x) this.robotPos.x = pos.x;
+    if (pos.y) this.robotPos.y = pos.y;
+    if (pos.heading) this.robotPos.heading = pos.heading;
 
-    const horizontalRadius =
-      ((Math.sqrt(2 * Math.pow(9 /*L*/, 2)) - 9) *
-        // Math.cos((((Math.abs(this.robotPos.heading) + 45) % 90) * Math.PI) / 180);
-        // (-Math.cos(((this.robotPos.heading%90) * Math.PI) / 180) +
-        //   1 +
-        //   Math.sqrt(1 / 2));
-        (1 - Math.cos((4 * this.robotPos.heading * Math.PI) / 180))) /
-        2 +
-      9;
-
-    if (pos.x != undefined) this.robotPos.x = pos.x;
-
-    if (pos.y != undefined) this.robotPos.y = pos.y;
-
-    console.log({ heading: this.robotPos.heading, horizontalRadius });
-    this.robotPos.x = Math.max(
-      Math.min(this.robotPos.x, fieldLength - horizontalRadius),
-      horizontalRadius
-    );
-    this.robotPos.y = Math.max(
-      Math.min(this.robotPos.y, fieldLength - horizontalRadius),
-      horizontalRadius
-    );
     // if (!opts || !opts.editFin) {
     //   vscode.postMessage({
     //     type: "stroke",
@@ -252,41 +222,32 @@ class PawDrawEditor {
     //     heading: this.robotPos.heading,
     //   });
     // }
-
-    let width = robotBounds.width;
-    let height = robotBounds.height;
-
-    console.log(robotBounds);
-
-    const transform = `translate(${
-      //   Math.max(
-      //     width-this.robotWidth,
-      //     Math.min(
-      this.robotPos.x * (fieldBounds.width / fieldLength) -
-      this.robot.offsetWidth / 2 /* , */
-      //   fieldBounds.width - width
-      // )
-      // )
-    }px, ${
-      // Math.min(
-      // height-this.robotHeight,
-      // Math.max(
-      -this.robotPos.y * (fieldBounds.height / fieldLength) +
-      this.robot.offsetHeight / 2 /* , */
-      //   -fieldBounds.height + height
-      // )
-      // )
-    }px)rotate(${(this.robotPos.heading %= 360)}deg)`;
     this.robot.animate(
-      [{ transform: this.robot.style.transform }, { transform }],
-      { duration: opts.duration }
+      [
+        { transform: this.robot.style.transform },
+        {
+          transform: `translate(${
+            this.robotPos.x * (fieldBounds.width / fieldLength) -
+            this.robotWidth / 2
+          }px, ${
+            -this.robotPos.y * (fieldBounds.height / fieldLength) +
+            this.robotHeight / 2
+          }px)rotate(${this.robotPos.heading}deg)`,
+        },
+      ],
+      { duration: (opts ? opts.duration : 0) || 200 }
     );
-    // @ts-ignore
-    return (this.robot.style.transform = transform);
+    return (this.robot.style.transform = `translate(${
+      /* pos.x ||  */ this.robotPos.x * (fieldBounds.width / fieldLength) -
+      /* robotBounds.width */
+      this.robotWidth / 2
+    }px, ${
+      -(/* pos.y ||  */ this.robotPos.y) * (fieldBounds.height / fieldLength) +
+      /* robotBounds.height */ this.robotHeight / 2
+    }px)rotate(${/* pos.heading || */ this.robotPos.heading}deg)`);
   }
 
   updateRobotPosition() {
-    // console.log("update robot pos");
     vscode.postMessage({
       type: "stroke",
       x: this.robotPos.x,
@@ -298,10 +259,7 @@ class PawDrawEditor {
   _initElements(/** @type {HTMLElement} */ parent) {
     let mouseMoveListener = ({ clientX: x, clientY: y }) => {
       try {
-        let mousePos = this.getLocalFieldPos({ x, y });
-        mousePos.x = Math.round(mousePos.x);
-        mousePos.y = Math.round(mousePos.y);
-        this.setRobotPosition(mousePos);
+        this.setRobotPosition(this.getLocalFieldPos({ x, y }));
       } catch {}
     };
     let mouseRotateListener = ({ clientX: x, clientY: y }) => {
@@ -309,11 +267,12 @@ class PawDrawEditor {
       // console.log({ x, y });
       try {
         this.setRobotPosition({
-          // ...this.robotPos,
-          heading: Math.round(
-            Math.atan2(x - robotCenter.x, robotCenter.y - y) * (180 / Math.PI)
-            //   /  10
-          ) /* * 10, */,
+          ...this.robotPos,
+          heading:
+            // Math.round(
+            Math.atan2(x - robotCenter.x, robotCenter.y - y) * (180 / Math.PI),
+          //   /  10
+          // ) * 10,
         });
       } catch {}
     };
@@ -346,20 +305,20 @@ class PawDrawEditor {
       }
     });
     window.addEventListener("resize", () => {
-      this.setRobotPosition({}, { check: false });
+      this.setRobotPosition(this.robotPos);
       console.log("resize");
     });
 
     window.addEventListener("keydown", (ev) => {
       if (!ev.ctrlKey && !ev.altKey) {
-        // console.log(ev);
+        console.log(ev);
         // for moving
         let dir = null;
         switch (ev.key.toLowerCase()) {
           case "r":
             return this.setRobotPosition({
               ...this.robotPos,
-              heading: this.robotPos.heading + (ev.shiftKey ? -90 : 90),
+              heading: (this.robotPos.heading + (ev.shiftKey ? 90 : -90)) % 360,
             });
           case "arrowup":
           case "w":
@@ -378,17 +337,12 @@ class PawDrawEditor {
               x: this.robotPos.x + 3 * dir.x,
               y: this.robotPos.y + 3 * dir.y,
             });
-          case "c":
-            try {
-              this.setRobotPosition({ heading: 0 });
-              this.updateRobotPosition();
-            } catch {}
-            return;
         }
       }
     });
+    console.log("keyup");
     window.addEventListener("keyup", (ev) => {
-      // console.log(ev);
+      console.log(ev);
       switch (ev.key.toLowerCase()) {
         case "r":
         case "arrowup":
@@ -504,10 +458,7 @@ class PawDrawEditor {
   //  * @param {Uint8Array | undefined} data
   //  */
   // //  * @param {Array<Stroke> | undefined} strokes
-  /* async */ reset(
-    /** @type {{heading: number, x: number, y: number} | null}*/ pos = this
-      .startPos
-  ) {
+  /* async */ reset(/** @type {{heading: number, x: number, y: number}}*/ pos) {
     // if (data) {
     //   const img = await loadImageFromData(data);
     //   this.initialCanvas.width /* = this.drawingCanvas.width */ = img.naturalWidth;
@@ -519,9 +470,7 @@ class PawDrawEditor {
     // this.strokes = strokes;
     // this._redraw();
     // let str = data.map(String.fromCharCode).join("");
-    if (!this.startPos) this.startPos = pos;
-
-    if (pos) this.setRobotPosition(pos);
+    this.setRobotPosition(pos);
   }
 
   // /**
@@ -583,11 +532,9 @@ window.addEventListener("message", async (e) => {
 
       // editor.reset(body.edits[body.edits.length]);
 
-      /* if (body.edits.length)  */ editor.reset(
-        body.edits[body.edits.length - 1]
-      );
-      return;
-      // body.value = body.content;
+      if (body.edits.length)
+        return editor.reset(body.edits[body.edits.length - 1]);
+      body.value = body.content;
     }
     case "init": {
       editor.setEditable(body.editable);
