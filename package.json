@@ -21,15 +21,6 @@
 	"contributes": {
 		"customEditors": [
 			{
-				"viewType": "catCustoms.catScratch",
-				"displayName": "Cat Scratch",
-				"selector": [
-					{
-						"filenamePattern": "*.cscratch"
-					}
-				]
-			},
-			{
 				"viewType": "catCustoms.pawDraw",
 				"displayName": "Paw Draw",
 				"selector": [
