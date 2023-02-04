@@ -221,7 +221,7 @@ class PawDrawEditor {
 
     if (pos.heading != undefined) this.robotPos.heading = pos.heading;
 
-    const horizontalRadius = Math.ceil(
+    const horizontalRadius =
       ((Math.sqrt(2 * Math.pow(9 /*L*/, 2)) - 9) *
         // Math.cos((((Math.abs(this.robotPos.heading) + 45) % 90) * Math.PI) / 180);
         // (-Math.cos(((this.robotPos.heading%90) * Math.PI) / 180) +
@@ -229,19 +229,19 @@ class PawDrawEditor {
         //   Math.sqrt(1 / 2));
         (1 - Math.cos((4 * this.robotPos.heading * Math.PI) / 180))) /
         2 +
-      9);
+      9;
 
     if (pos.x != undefined) this.robotPos.x = pos.x;
 
     if (pos.y != undefined) this.robotPos.y = pos.y;
 
-    // console.log({ heading: this.robotPos.heading, horizontalRadius });
+    console.log({ heading: this.robotPos.heading, horizontalRadius });
     this.robotPos.x = Math.max(
-      Math.min(Math.round(this.robotPos.x), fieldLength - horizontalRadius),
+      Math.min(this.robotPos.x, fieldLength - horizontalRadius),
       horizontalRadius
     );
     this.robotPos.y = Math.max(
-      Math.min(Math.round(this.robotPos.y), fieldLength - horizontalRadius),
+      Math.min(this.robotPos.y, fieldLength - horizontalRadius),
       horizontalRadius
     );
     // if (!opts || !opts.editFin) {
@@ -256,7 +256,7 @@ class PawDrawEditor {
     let width = robotBounds.width;
     let height = robotBounds.height;
 
-    // console.log(robotBounds);
+    console.log(robotBounds);
 
     const transform = `translate(${
       //   Math.max(
