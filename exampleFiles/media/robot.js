@@ -2,12 +2,12 @@ const fieldLength = 2 * 6 * 12;
 class Robot {
   /**
    * in inches, relative to game
-   * @returns {{heading: number, x: number, y: number}}
+   * @returns {{heading: number, x: number, y: number}};
    */
   getIRLPos() {}
   /**
-   * in pixels, relative to window or smth
-   * @returns {{heading: number, x: number, y: number}}
+   *  in pixels, relative to window or smth
+   * @returns {{heading: number, x: number, y: number}};
    */
   getAbsPos() {}
   /**
@@ -31,21 +31,6 @@ class Robot {
   resetPos() {
     this.#setPos(this.#pos);
   }
-  /**
-   * convert IRL inches to pixels relative to field element
-   * @param {{x: number, y: number}} irlPos
-   * @returns {{x: number, y: number}}
-   */
-  static #convertIRLToRel(irlPos) {
-    return {
-      x:
-        irlPos.x * (fieldBounds.width / fieldLength) -
-        this.robot.offsetWidth / 2,
-      y:
-        irlPos.y * (fieldBounds.width / fieldLength) -
-        this.robot.offsetWidth / 2,
-    };
-  }
 
   /**
    * move bot to IRL pos
@@ -54,13 +39,9 @@ class Robot {
   #setPos(pos) {
     const fieldBounds = this.field.getBoundingClientRect();
 
-    // if (pos.heading != undefined) this.#pos.heading = pos.heading;
-    // if (pos.x != undefined) this.#pos.x = pos.x;
-    // if (pos.y != undefined) this.#pos.y = pos.y;
-    this.#pos = { ...this.#pos, ...pos };
+    if (pos.heading != undefined) this.#pos.heading = pos.heading;
 
-    this.#pos.heading = Math.round(this.#pos.heading);
-    
+    //
     const horizontalRadius = Math.ceil(
       ((Math.sqrt(2 * Math.pow(this.#radiusIRL, 2)) - this.#radiusIRL) *
         (1 - Math.cos((4 * this.#pos.heading * Math.PI) / 180))) /
@@ -68,22 +49,40 @@ class Robot {
         this.#radiusIRL
     );
 
-    // maximum possible x pos for bot
-    const maxX = fieldLength - horizontalRadius;
+    if (pos.x != undefined) this.#pos.x = pos.x;
+    if (pos.y != undefined) this.#pos.y = pos.y;
+
+    const greatestX = fieldLength - horizontalRadius;
 
     this.#pos.x = Math.max(
-      Math.min(Math.round(this.#pos.x), maxX),
+      Math.min(Math.round(this.#pos.x), greatestX),
       horizontalRadius
     );
     this.#pos.y = Math.max(
-      Math.min(Math.round(this.#pos.y), maxX),
+      Math.min(Math.round(this.#pos.y), greatestX),
       horizontalRadius
     );
 
     // console.log(robotBounds);
-    const relPos = Robot.#convertIRLToRel(this.#pos);
-    const transform = `translate(${relPos.x}px, ${
-      relPos.y
+
+    const transform = `translate(${
+      //   Math.max(
+      //     width-this.robotWidth,
+      //     Math.min(
+      this.#pos.x * (fieldBounds.width / fieldLength) -
+      this.robot.offsetWidth / 2 /* , */
+      //   fieldBounds.width - width
+      // )
+      // )
+    }px, ${
+      // Math.min(
+      // height-this.robotHeight,
+      // Math.max(
+      -this.#pos.y * (fieldBounds.height / fieldLength) +
+      this.robot.offsetHeight / 2 /* , */
+      //   -fieldBounds.height + height
+      // )
+      // )
     }px)rotate(${(this.#pos.heading %= 360)}deg)`;
     this.robot.animate(
       [{ transform: this.robot.style.transform }, { transform }],
