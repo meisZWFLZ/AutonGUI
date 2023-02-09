@@ -1,22 +1,81 @@
-const fieldLength = 2 * 6 * 12;
+/* 
+In this document, I often use the terms "IRL", "Rel", and "Abs" to refers to the dimensions and measurements
+"IRL" - inches of the physical field
+"Rel" - pixels relative to field
+"Abs" - pixels relative to window
+
+IRL and Rel positions utilize the bottom left corner of the field as the origin
+(Blue goal corner for Spin Up)
+*/
+
+const irlFieldLength = 2 * 6 * 12;
+
+const field = document.querySelector(".field");
+if (!this.field) throw "no field";
+const fieldBounds = field.getBoundingClientRect();
+
 class Robot {
   /**
-   * in inches, relative to game
-   * @returns {{heading: number, x: number, y: number}}
+   * convert IRL inches to pixels relative to field element
+   * @param {{x: number, y: number}} irlPos
+   * @returns {{x: number, y: number}}
    */
-  getIRLPos() {}
+  static #convertIRLToRel(irlPos) {
+    const pxPerInch = fieldBounds.width / irlFieldLength;
+    const halfRobotWidth = this.robot.offsetWidth / 2;
+    return {
+      // if field ever becomes rectangular, this will not work
+      x: irlPos.x * pxPerInch - halfRobotWidth,
+      y: irlPos.y * pxPerInch - halfRobotWidth,
+    };
+  }
+  /*
+  compute inverse:
+  f(x) = x * (fw / ifl) - row / 2;
+  x = y * (fw / ifl) - row / 2;
+  x + row / 2 = y * ( fw / ifl );
+  (x + row / 2) / ( fw / ifl ) = y;
+  (x + row / 2) / ( fw / ifl ) = f-1(x);
+  */
   /**
-   * in pixels, relative to window or smth
+   * convert IRL inches to pixels relative to field element
+   * @param {{x: number, y: number}} relPos
+   * @returns {{x: number, y: number}}
+   */
+  static #convertRelToIRL(relPos) {
+    const pxPerInch = fieldBounds.width / irlFieldLength;
+    const halfRobotWidth = this.robot.offsetWidth / 2;
+    return {
+      // if field ever becomes rectangular, this will not work
+      x: (relPos.x + halfRobotWidth) / pxPerInch,
+      y: (relPos.y + halfRobotWidth) / pxPerInch,
+    };
+  }
+  /**
+   * in inches of physical field
    * @returns {{heading: number, x: number, y: number}}
    */
-  getAbsPos() {}
+  getIRLPos() {
+    return pos;
+  }
+  /**
+   * in pixels relative to window or smth
+   * @returns {{heading: number, x: number, y: number}}
+   */
+  getAbsPos() {
+    const robotBounds = this.robot.getBoundingClientRect();
+    const halfRobotWidth = this.robot.offsetWidth / 2;
+    return {
+      x: robotBounds.left + halfRobotWidth,
+      y: robotBounds.top + halfRobotWidth,
+    };
+  }
   /**
    * move bot to IRL pos
    * @param {{heading: number, x: number, y: number}} pos
    */
   goTo(pos = this.#pos) {
     if (
-      opts.check &&
       (pos.x == undefined || pos.x == this.#pos.x) &&
       (pos.y == undefined || pos.y == this.#pos.y) &&
       (pos.heading == undefined || pos.heading == this.#pos.heading)
@@ -31,36 +90,19 @@ class Robot {
   resetPos() {
     this.#setPos(this.#pos);
   }
-  /**
-   * convert IRL inches to pixels relative to field element
-   * @param {{x: number, y: number}} irlPos
-   * @returns {{x: number, y: number}}
-   */
-  static #convertIRLToRel(irlPos) {
-    return {
-      x:
-        irlPos.x * (fieldBounds.width / fieldLength) -
-        this.robot.offsetWidth / 2,
-      y:
-        irlPos.y * (fieldBounds.width / fieldLength) -
-        this.robot.offsetWidth / 2,
-    };
-  }
 
   /**
    * move bot to IRL pos
    * @param {{heading: number, x: number, y: number}} pos
    */
   #setPos(pos) {
-    const fieldBounds = this.field.getBoundingClientRect();
-
     // if (pos.heading != undefined) this.#pos.heading = pos.heading;
     // if (pos.x != undefined) this.#pos.x = pos.x;
     // if (pos.y != undefined) this.#pos.y = pos.y;
     this.#pos = { ...this.#pos, ...pos };
 
     this.#pos.heading = Math.round(this.#pos.heading);
-    
+
     const horizontalRadius = Math.ceil(
       ((Math.sqrt(2 * Math.pow(this.#radiusIRL, 2)) - this.#radiusIRL) *
         (1 - Math.cos((4 * this.#pos.heading * Math.PI) / 180))) /
@@ -69,30 +111,27 @@ class Robot {
     );
 
     // maximum possible x pos for bot
-    const maxX = fieldLength - horizontalRadius;
+    const maxX = irlFieldLength - horizontalRadius;
 
-    this.#pos.x = Math.max(
-      Math.min(Math.round(this.#pos.x), maxX),
-      horizontalRadius
-    );
-    this.#pos.y = Math.max(
-      Math.min(Math.round(this.#pos.y), maxX),
-      horizontalRadius
-    );
+    this.#pos.x = Math.max(Math.min(Math.round(this.#pos.x), maxX), horizontalRadius);
+    this.#pos.y = Math.max(Math.min(Math.round(this.#pos.y), maxX), horizontalRadius);
 
     // console.log(robotBounds);
     const relPos = Robot.#convertIRLToRel(this.#pos);
     const transform = `translate(${relPos.x}px, ${
       relPos.y
     }px)rotate(${(this.#pos.heading %= 360)}deg)`;
-    this.robot.animate(
-      [{ transform: this.robot.style.transform }, { transform }],
-      { duration: opts.duration }
-    );
+    this.robot.animate([{ transform: this.robot.style.transform }, { transform }], {
+      duration: opts.duration,
+    });
     // @ts-ignore
     return (this.robot.style.transform = transform);
   }
-  constructor(/** @type {HTMLElement} */ element) {
+  /**
+   * @param {HTMLElement} element
+   * @param {{heading: number, x: number, y: number}} pos
+   */
+  constructor(element, pos) {
     this.robot = element;
     this.#pos = getIRLPos();
     // could be changed for custom robot length

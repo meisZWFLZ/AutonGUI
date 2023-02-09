@@ -134,66 +134,64 @@ class PawDrawEditor {
     };
   }
 
-  /**
-   * @returns {{heading: number, x: number, y: number}};
-   */
-  getRobotPosition() {
-    let getHeading = (el) => {
-      try {
-        const transformValues = window
-          .getComputedStyle(el)
-          .getPropertyValue("transform")
-          .split("(")[1]
-          .split(")")[0]
-          .split(",");
-        console.log(transformValues);
-        // const rotation =
-        //   Math.round(
-        //     Math.atan2(
-        //       parseFloat(transformValues[1]),
-        //       parseFloat(transformValues[0])
-        //     )
-        //   ) *
-        //   (180 / Math.PI);
-        // const rotation = Math.round(
-        //   Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI)
-        // );
-        return Math.round(
-          Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI)
-        );
-      } catch {
-        return 0;
-      }
-    };
-    // const fieldLength = 2 * 6 * 12; // field length in inches
+  // /**
+  //  * @returns {{heading: number, x: number, y: number}};
+  //  */
+  // getRobotPosition() {
+  //   let getHeading = (el) => {
+  //     try {
+  //       const transformValues = window
+  //         .getComputedStyle(el)
+  //         .getPropertyValue("transform")
+  //         .split("(")[1]
+  //         .split(")")[0]
+  //         .split(",");
+  //       console.log(transformValues);
+  //       // const rotation =
+  //       //   Math.round(
+  //       //     Math.atan2(
+  //       //       parseFloat(transformValues[1]),
+  //       //       parseFloat(transformValues[0])
+  //       //     )
+  //       //   ) *
+  //       //   (180 / Math.PI);
+  //       // const rotation = Math.round(
+  //       //   Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI)
+  //       // );
+  //       return Math.round(Math.asin(parseFloat(transformValues[1])) * (180 / Math.PI));
+  //     } catch {
+  //       return 0;
+  //     }
+  //   };
+  //   // const fieldLength = 2 * 6 * 12; // field length in inches
 
-    // const fieldBounds = this.field.getBoundingClientRect();
-    const robotBounds = this.robot.getBoundingClientRect();
+  //   // const fieldBounds = this.field.getBoundingClientRect();
+  //   // const robotBounds = this.robot.getBoundingClientRect();
 
-    // // get center of robot in px in relation to field
-    // let pos = {
-    //   heading: getHeading(this.robot),
-    //   x: robotBounds.width / 2 + robotBounds.left - fieldBounds.x,
-    //   y: fieldBounds.bottom - robotBounds.top - robotBounds.height / 2,
-    // };
+  //   // // get center of robot in px in relation to field
+  //   // let pos = {
+  //   //   heading: getHeading(this.robot),
+  //   //   x: robotBounds.width / 2 + robotBounds.left - fieldBounds.x,
+  //   //   y: fieldBounds.bottom - robotBounds.top - robotBounds.height / 2,
+  //   // };
 
-    // // translate to inches
-    // pos.x /= fieldBounds.width / fieldLength;
-    // pos.y /= fieldBounds.height / fieldLength;
+  //   // // translate to inches
+  //   // pos.x /= fieldBounds.width / fieldLength;
+  //   // pos.y /= fieldBounds.height / fieldLength;
 
-    // console.log(pos);
-    // return pos;
-    const robotCenter = this.getRobotAbsoluteCenter(); /* = {
-      x: this.robot.offsetWidth / 2 + robotBounds.left,
-      y: robotBounds.top + this.robot.offsetHeight / 2,
-    }; */
-    let pos = {
-      ...this.getLocalFieldPos(robotCenter),
-      heading: getHeading(this.robot),
-    };
-    console.log(pos);
-    return pos;
-  }
+  //   // console.log(pos);
+  //   // return pos;
+  //   const robotCenter = this.getRobotAbsoluteCenter(); /* = {
+  //     x: this.robot.offsetWidth / 2 + robotBounds.left,
+  //     y: robotBounds.top + this.robot.offsetHeight / 2,
+  //   }; */
+  //   let pos = {
+  //     ...this.getLocalFieldPos(robotCenter),
+  //     heading: getHeading(this.robot),
+  //   };
+  //   console.log(pos);
+  //   return pos;
+  // }
 
   setRobotPosition(
     /** @type {{heading?: number, x?: number, y?: number}} */ pos,
@@ -229,7 +227,8 @@ class PawDrawEditor {
         //   Math.sqrt(1 / 2));
         (1 - Math.cos((4 * this.robotPos.heading * Math.PI) / 180))) /
         2 +
-      9);
+        9
+    );
 
     if (pos.x != undefined) this.robotPos.x = pos.x;
 
@@ -262,8 +261,7 @@ class PawDrawEditor {
       //   Math.max(
       //     width-this.robotWidth,
       //     Math.min(
-      this.robotPos.x * (fieldBounds.width / fieldLength) -
-      this.robot.offsetWidth / 2 /* , */
+      this.robotPos.x * (fieldBounds.width / fieldLength) - this.robot.offsetWidth / 2 /* , */     
       //   fieldBounds.width - width
       // )
       // )
@@ -271,16 +269,14 @@ class PawDrawEditor {
       // Math.min(
       // height-this.robotHeight,
       // Math.max(
-      -this.robotPos.y * (fieldBounds.height / fieldLength) +
-      this.robot.offsetHeight / 2 /* , */
+      -this.robotPos.y * (fieldBounds.height / fieldLength) + this.robot.offsetHeight / 2 /* , */
       //   -fieldBounds.height + height
       // )
       // )
     }px)rotate(${(this.robotPos.heading %= 360)}deg)`;
-    this.robot.animate(
-      [{ transform: this.robot.style.transform }, { transform }],
-      { duration: opts.duration }
-    );
+    this.robot.animate([{ transform: this.robot.style.transform }, { transform }], {
+      duration: opts.duration,
+    });
     // @ts-ignore
     return (this.robot.style.transform = transform);
   }
@@ -505,8 +501,7 @@ class PawDrawEditor {
   //  */
   // //  * @param {Array<Stroke> | undefined} strokes
   /* async */ reset(
-    /** @type {{heading: number, x: number, y: number} | null}*/ pos = this
-      .startPos
+    /** @type {{heading: number, x: number, y: number} | null}*/ pos = this.startPos
   ) {
     // if (data) {
     //   const img = await loadImageFromData(data);
@@ -559,9 +554,7 @@ class PawDrawEditor {
     //   outCanvas.toBlob(resolve, "image/png");
     // });
 
-    return Array.from(JSON.stringify(this.robotPos)).map((e) =>
-      e.charCodeAt(0)
-    );
+    return Array.from(JSON.stringify(this.robotPos)).map((e) => e.charCodeAt(0));
   }
 }
 
@@ -583,9 +576,7 @@ window.addEventListener("message", async (e) => {
 
       // editor.reset(body.edits[body.edits.length]);
 
-      /* if (body.edits.length)  */ editor.reset(
-        body.edits[body.edits.length - 1]
-      );
+      /* if (body.edits.length)  */ editor.reset(body.edits[body.edits.length - 1]);
       return;
       // body.value = body.content;
     }
