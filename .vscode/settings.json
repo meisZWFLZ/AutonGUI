@@ -1,3 +1,9 @@
 {
-    "editor.insertSpaces": false
+    "editor.insertSpaces": false,
+    "cSpell.words": [
+        "arrowdown",
+        "arrowleft",
+        "arrowright",
+        "arrowup"
+    ]
 }

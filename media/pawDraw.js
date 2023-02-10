@@ -2,26 +2,11 @@
 
 // This script is run within the webview itself
 // (function () {
+
+import { Robot } from "./robot";
+
 // @ts-ignore
 const vscode = acquireVsCodeApi();
-
-/**
- * A drawn line.
- */
-// class Stroke {
-//   constructor(
-//     /** @type {string} */ color,
-//     /** @type {Array<[number, number]> | undefined} */ stroke
-//   ) {
-//     this.color = color;
-//     /** @type {Array<[number, number]>} */
-//     this.stroke = stroke || [];
-//   }
-
-//   addPoint(/** @type {number} */ x, /** @type {number} */ y) {
-//     this.stroke.push([x, y]);
-//   }
-// }
 
 /**
  * @param {Uint8Array} initialContent
@@ -50,20 +35,24 @@ class PawDrawEditor {
 
     this.editable = false;
 
-    this.robot = document.querySelector(".robot");
-    if (!this.robot) throw "no robot";
-    this.field = document.querySelector(".field");
-    if (!this.field) throw "no field";
+    // this.robot = document.querySelector(".robot");\
+    const robotEl = document.querySelector(".robot");
+    if (robotEl) this.robot = new Robot(robotEl, { x: 0, y: 0, heading: 0 });
+    else throw "no robot";
 
-    this.robotPos = { x: 0, y: 0, heading: 0 };
+    // this.field = document.querySelector(".field");
+    // if (!this.field) throw "no field";
 
-    // they are the same, but in future, might be different to accomadate custom robot dimensions
-    this.robotHeight = this.robot.getBoundingClientRect().height;
-    this.robotWidth = this.robot.getBoundingClientRect().width;
+    // this.robotPos = { x: 0, y: 0, heading: 0 };
+
+    // // they are the same, but in future, might be different to accommodate custom robot dimensions
+    // this.robotHeight = this.robot.getBoundingClientRect().height;
+    // this.robotWidth = this.robot.getBoundingClientRect().width;
 
     this.startPos = null;
     // this.drawingColor = "black";
-    console.log(this.robotPos);
+    // console.log(this.robotPos);
+
     // /** @type {Array<Stroke>} */
     // this.strokes = [];
 
@@ -123,16 +112,17 @@ class PawDrawEditor {
     // console.log(pos);
     return pos;
   }
-  /**
-   * @returns {{x: number, y: number}};
-   */
-  getRobotAbsoluteCenter() {
-    const robotBounds = this.robot.getBoundingClientRect();
-    return {
-      x: this.robot.offsetWidth / 2 + robotBounds.left,
-      y: robotBounds.top + this.robot.offsetHeight / 2,
-    };
-  }
+  
+  // /**
+  //  * @returns {{x: number, y: number}};
+  //  */
+  // getRobotAbsoluteCenter() {
+  //   const robotBounds = this.robot.getBoundingClientRect();
+  //   return {
+  //     x: this.robot.offsetWidth / 2 + robotBounds.left,
+  //     y: robotBounds.top + this.robot.offsetHeight / 2,
+  //   };
+  // }
 
   // /**
   //  * @returns {{heading: number, x: number, y: number}};
@@ -193,107 +183,107 @@ class PawDrawEditor {
   //   return pos;
   // }
 
-  setRobotPosition(
-    /** @type {{heading?: number, x?: number, y?: number}} */ pos,
-    /** @type {{duration?: number, check: boolean}} */ opts = {
-      duration: 200,
-      check: true,
-    }
-  ) {
-    if (
-      opts.check &&
-      (pos.x == undefined || pos.x == this.robotPos.x) &&
-      (pos.y == undefined || pos.y == this.robotPos.y) &&
-      (pos.heading == undefined || pos.heading == this.robotPos.heading)
-    )
-      throw "no change in robot positon";
+  // setRobotPosition(
+  //   /** @type {{heading?: number, x?: number, y?: number}} */ pos,
+  //   /** @type {{duration?: number, check: boolean}} */ opts = {
+  //     duration: 200,
+  //     check: true,
+  //   }
+  // ) {
+  //   if (
+  //     opts.check &&
+  //     (pos.x == undefined || pos.x == this.robotPos.x) &&
+  //     (pos.y == undefined || pos.y == this.robotPos.y) &&
+  //     (pos.heading == undefined || pos.heading == this.robotPos.heading)
+  //   )
+  //     throw "no change in robot position";
 
-    // pos.x = Math.max(widthHalf, Math.min(pos.x, fieldBounds.width - widthHalf));
-    // pos.y =
-    //  console.log({ pos: { ...pos }, robot: { ...this.robotPos } });
+  //   // pos.x = Math.max(widthHalf, Math.min(pos.x, fieldBounds.width - widthHalf));
+  //   // pos.y =
+  //   //  console.log({ pos: { ...pos }, robot: { ...this.robotPos } });
 
-    const fieldLength = 2 * 6 * 12; // field length in inches
+  //   const fieldLength = 2 * 6 * 12; // field length in inches
 
-    const fieldBounds = this.field.getBoundingClientRect();
-    const robotBounds = this.robot.getBoundingClientRect();
+  //   const fieldBounds = this.field.getBoundingClientRect();
+  //   const robotBounds = this.robot.getBoundingClientRect();
 
-    if (pos.heading != undefined) this.robotPos.heading = pos.heading;
+  //   if (pos.heading != undefined) this.robotPos.heading = pos.heading;
 
-    const horizontalRadius = Math.ceil(
-      ((Math.sqrt(2 * Math.pow(9 /*L*/, 2)) - 9) *
-        // Math.cos((((Math.abs(this.robotPos.heading) + 45) % 90) * Math.PI) / 180);
-        // (-Math.cos(((this.robotPos.heading%90) * Math.PI) / 180) +
-        //   1 +
-        //   Math.sqrt(1 / 2));
-        (1 - Math.cos((4 * this.robotPos.heading * Math.PI) / 180))) /
-        2 +
-        9
-    );
+  //   const horizontalRadius = Math.ceil(
+  //     ((Math.sqrt(2 * Math.pow(9 /*L*/, 2)) - 9) *
+  //       // Math.cos((((Math.abs(this.robotPos.heading) + 45) % 90) * Math.PI) / 180);
+  //       // (-Math.cos(((this.robotPos.heading%90) * Math.PI) / 180) +
+  //       //   1 +
+  //       //   Math.sqrt(1 / 2));
+  //       (1 - Math.cos((4 * this.robotPos.heading * Math.PI) / 180))) /
+  //       2 +
+  //       9
+  //   );
 
-    if (pos.x != undefined) this.robotPos.x = pos.x;
+  //   if (pos.x != undefined) this.robotPos.x = pos.x;
 
-    if (pos.y != undefined) this.robotPos.y = pos.y;
+  //   if (pos.y != undefined) this.robotPos.y = pos.y;
 
-    // console.log({ heading: this.robotPos.heading, horizontalRadius });
-    this.robotPos.x = Math.max(
-      Math.min(Math.round(this.robotPos.x), fieldLength - horizontalRadius),
-      horizontalRadius
-    );
-    this.robotPos.y = Math.max(
-      Math.min(Math.round(this.robotPos.y), fieldLength - horizontalRadius),
-      horizontalRadius
-    );
-    // if (!opts || !opts.editFin) {
-    //   vscode.postMessage({
-    //     type: "stroke",
-    //     x: this.robotPos.x,
-    //     y: this.robotPos.y,
-    //     heading: this.robotPos.heading,
-    //   });
-    // }
+  //   // console.log({ heading: this.robotPos.heading, horizontalRadius });
+  //   this.robotPos.x = Math.max(
+  //     Math.min(Math.round(this.robotPos.x), fieldLength - horizontalRadius),
+  //     horizontalRadius
+  //   );
+  //   this.robotPos.y = Math.max(
+  //     Math.min(Math.round(this.robotPos.y), fieldLength - horizontalRadius),
+  //     horizontalRadius
+  //   );
+  //   // if (!opts || !opts.editFin) {
+  //   //   vscode.postMessage({
+  //   //     type: "stroke",
+  //   //     x: this.robotPos.x,
+  //   //     y: this.robotPos.y,
+  //   //     heading: this.robotPos.heading,
+  //   //   });
+  //   // }
 
-    let width = robotBounds.width;
-    let height = robotBounds.height;
+  //   let width = robotBounds.width;
+  //   let height = robotBounds.height;
 
-    // console.log(robotBounds);
+  //   // console.log(robotBounds);
 
-    const transform = `translate(${
-      //   Math.max(
-      //     width-this.robotWidth,
-      //     Math.min(
-      this.robotPos.x * (fieldBounds.width / fieldLength) - this.robot.offsetWidth / 2 /* , */     
-      //   fieldBounds.width - width
-      // )
-      // )
-    }px, ${
-      // Math.min(
-      // height-this.robotHeight,
-      // Math.max(
-      -this.robotPos.y * (fieldBounds.height / fieldLength) + this.robot.offsetHeight / 2 /* , */
-      //   -fieldBounds.height + height
-      // )
-      // )
-    }px)rotate(${(this.robotPos.heading %= 360)}deg)`;
-    this.robot.animate([{ transform: this.robot.style.transform }, { transform }], {
-      duration: opts.duration,
-    });
-    // @ts-ignore
-    return (this.robot.style.transform = transform);
-  }
+  //   const transform = `translate(${
+  //     //   Math.max(
+  //     //     width-this.robotWidth,
+  //     //     Math.min(
+  //     this.robotPos.x * (fieldBounds.width / fieldLength) - this.robot.offsetWidth / 2 /* , */
+  //     //   fieldBounds.width - width
+  //     // )
+  //     // )
+  //   }px, ${
+  //     // Math.min(
+  //     // height-this.robotHeight,
+  //     // Math.max(
+  //     -this.robotPos.y * (fieldBounds.height / fieldLength) + this.robot.offsetHeight / 2 /* , */
+  //     //   -fieldBounds.height + height
+  //     // )
+  //     // )
+  //   }px)rotate(${(this.robotPos.heading %= 360)}deg)`;
+  //   this.robot.animate([{ transform: this.robot.style.transform }, { transform }], {
+  //     duration: opts.duration,
+  //   });
+  //   // @ts-ignore
+  //   return (this.robot.style.transform = transform);
+  // }
 
   updateRobotPosition() {
     // console.log("update robot pos");
+    const pos = this.robot.getIRLPos();
     vscode.postMessage({
       type: "stroke",
-      x: this.robotPos.x,
-      y: this.robotPos.y,
-      heading: this.robotPos.heading,
+      ...pos,
     });
   }
 
   _initElements(/** @type {HTMLElement} */ parent) {
     let mouseMoveListener = ({ clientX: x, clientY: y }) => {
       try {
+        // let mousePos = this.getLocalFieldPos({ x, y });
         let mousePos = this.getLocalFieldPos({ x, y });
         mousePos.x = Math.round(mousePos.x);
         mousePos.y = Math.round(mousePos.y);

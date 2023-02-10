@@ -14,7 +14,7 @@ const field = document.querySelector(".field");
 if (!this.field) throw "no field";
 const fieldBounds = field.getBoundingClientRect();
 
-class Robot {
+export class Robot {
   /**
    * convert IRL inches to pixels relative to field element
    * @param {{x: number, y: number}} irlPos
@@ -59,7 +59,7 @@ class Robot {
     return pos;
   }
   /**
-   * in pixels relative to window or smth
+   * in pixels relative to window
    * @returns {{heading: number, x: number, y: number}}
    */
   getAbsPos() {
@@ -80,7 +80,7 @@ class Robot {
       (pos.y == undefined || pos.y == this.#pos.y) &&
       (pos.heading == undefined || pos.heading == this.#pos.heading)
     )
-      throw "no change in robot positon";
+      throw "no change in robot position";
     this.#setPos(pos);
   }
 
@@ -127,11 +127,15 @@ class Robot {
     // @ts-ignore
     return (this.robot.style.transform = transform);
   }
+
+  #goTo
+
   /**
-   * @param {HTMLElement} element
+   * @param {Element} element
    * @param {{heading: number, x: number, y: number}} pos
+   * @param {{followCursor: boolean}} opts
    */
-  constructor(element, pos) {
+  constructor(element, pos, opts = {followCursor: true}) {
     this.robot = element;
     this.#pos = getIRLPos();
     // could be changed for custom robot length
