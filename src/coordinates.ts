@@ -11,26 +11,41 @@ class Coordinate {
   }
 }
 
-class Position extends Coordinate {
+interface Rotatable {
+  get heading(): number;
+  set heading(a: number);
+};
+
+class Position extends Coordinate implements Rotatable {
   public heading: number;
   constructor(x: number, y: number, heading: number) {
     super(x, y);
     this.heading = heading;
   }
 }
-
+/** responsible for retrieving the dimensions of elements required to convert coordinate systems */
 abstract class _DimensionProvider {
+  /**
+   * gets the offset width of the robot element
+   * @example robotEl.offsetWidth
+   */
   public abstract get robotOffsetWidth(): number;
+  /**
+   * gets the width of field element
+   * @example field.getBoundingClientRect().width;
+   */
   public abstract get fieldWidth(): number;
-  /** gets the coordinate of the top left corner of field relative to the view port */
+  /**
+   * gets the coordinate of the top left corner of field relative to the view port 
+   * @example field.getBoundClientRect()
+  */
   public abstract get fieldCoord(): Coordinate;
 }
-
-
 abstract class ConvertibleCoordinate extends Coordinate {
   public static DimensionProvider = _DimensionProvider;
   protected dimProvider: _DimensionProvider;
 
+  /** @see _DimensionProvider */
   public constructor(x: number, y: number, dimProvider: _DimensionProvider) {
     super(x, y);
     this.dimProvider = dimProvider;
@@ -38,24 +53,27 @@ abstract class ConvertibleCoordinate extends Coordinate {
   public abstract toRelative(): Relative;
   public abstract toAbsolute(): Absolute;
   public abstract toPhysical(): Physical;
+
+
 }
 /** length of physical field in inches */
 const irlFieldLength: number = 2 * 6 * 12;
 // Should custom annotations be used here?
 // ex - @origin
+
 /**
  * Measures pixels relative to field html element.
  * The bottom left of field is the origin (Blue goal corner for Spin Up).
- */
+*/
 class Relative extends ConvertibleCoordinate {
   /**
    * @deprecated conversion to self
    */
-  toRelative(): Relative {
+  public toRelative(): Relative {
     console.warn("converting to self!");
     return this;
   }
-  toAbsolute(): Absolute {
+  public toAbsolute(): Absolute {
     const fieldCoord = this.dimProvider.fieldCoord;
     return {
       ...this,
@@ -63,7 +81,7 @@ class Relative extends ConvertibleCoordinate {
       y: this.dimProvider.fieldWidth + fieldCoord.y - this.y
     }
   }
-  toPhysical(): Physical {
+  public toPhysical(): Physical {
     const pxPerInch = this.dimProvider.fieldWidth / irlFieldLength;
     const halfRobotWidth = this.dimProvider.robotOffsetWidth / 2;
     return {
@@ -77,9 +95,9 @@ class Relative extends ConvertibleCoordinate {
 /**
  * Measures pixels relative to viewport.
  * The top left of viewport is the origin.
- */
+*/
 class Absolute extends ConvertibleCoordinate {
-  toRelative(): Relative {
+  public toRelative(): Relative {
     const fieldCoord = this.dimProvider.fieldCoord;
     return {
       ...this,
@@ -90,20 +108,20 @@ class Absolute extends ConvertibleCoordinate {
   /**
    * @deprecated conversion to self
    */
-  toAbsolute(): Absolute {
+  public toAbsolute(): Absolute {
     console.warn("converting to self!");
     return this;
   }
-  toPhysical(): Physical {
+  public toPhysical(): Physical {
     return this.toRelative().toPhysical();
   }
 };
 /**
  * Measures inches relative to physical field.
  * The bottom left of field is the origin (Blue goal corner for Spin Up).
- */
+*/
 class Physical extends ConvertibleCoordinate {
-  toRelative(): Relative {
+  public toRelative(): Relative {
     const pxPerInch = this.dimProvider.fieldWidth / irlFieldLength;
     const halfRobotWidth = this.dimProvider.robotOffsetWidth / 2;
     return {
@@ -112,15 +130,47 @@ class Physical extends ConvertibleCoordinate {
       y: this.y * pxPerInch - halfRobotWidth,
     };
   }
-  toAbsolute(): Absolute {
+  public toAbsolute(): Absolute {
     return this.toRelative().toAbsolute();
   }
   /**
    * @deprecated conversion to self
-   */
-  toPhysical(): Physical {
+  */
+  public toPhysical(): Physical {
     console.warn("converting to self!");
     return this;
   }
-
 };
+class RelativePos extends Relative implements Rotatable {
+  public heading: number;
+  constructor(x: number, y: number, dimProvider: _DimensionProvider, heading: number) {
+    super(x, y, dimProvider);
+    this.heading = heading;
+  }
+}
+class AbsolutePos extends Absolute implements Rotatable {
+  public heading: number;
+  constructor(x: number, y: number, dimProvider: _DimensionProvider, heading: number) {
+    super(x, y, dimProvider);
+    this.heading = heading;
+  }
+}
+class PhysicalPos extends Physical implements Rotatable {
+  public heading: number;
+  constructor(x: number, y: number, dimProvider: _DimensionProvider, heading: number) {
+    super(x, y, dimProvider);
+    this.heading = heading;
+  }
+}
+
+export {
+  Coordinate,
+  Position,
+  ConvertibleCoordinate,
+  Relative as RelativeCoord,
+  Absolute as AbsoluteCoord,
+  Physical as PhysicalCoord,
+  RelativePos,
+  AbsolutePos,
+  PhysicalPos,
+}

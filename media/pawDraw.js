@@ -4,7 +4,6 @@
 // (function () {
 
 import { Robot } from "./robot";
-
 // @ts-ignore
 const vscode = acquireVsCodeApi();
 
