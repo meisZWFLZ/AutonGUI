@@ -1,15 +1,6 @@
-import {
-  Coordinate,
-  Position,
-  ConvertibleCoordinate,
-  RelativeCoord,
-  AbsoluteCoord,
-  PhysicalCoord,
-  RelativePos,
-  AbsolutePos,
-  PhysicalPos,
-} from "../out/coordinates";
-
+import { AbsoluteCoord, PhysicalCoord, PhysicalPos, RelativeCoord } from "./coordinates.js";
+// console.log(Coordinates)
+// let { AbsoluteCoord, PhysicalCoord, PhysicalPos } = Coordinates;
 /* 
 In this document, I often use the terms "IRL", "Rel", and "Abs" to refers to the dimensions and measurements
 "IRL" - inches of the physical field
@@ -20,11 +11,11 @@ IRL and Rel positions utilize the bottom left corner of the field as the origin
 (Blue goal corner for Spin Up)
 */
 
-// const irlFieldLength = 2 * 6 * 12;
+const irlFieldLength: number = 2 * 6 * 12;
 
-const field = document.querySelector(".field");
-if (!this.field) throw "no field";
-const fieldBounds = field.getBoundingClientRect();
+// const field = document.querySelector(".field");
+// if (!field) throw "no field";
+// const fieldBounds = field.getBoundingClientRect();
 
 export class Robot {
   // /**
@@ -63,63 +54,68 @@ export class Robot {
   //     y: (relPos.y + halfRobotWidth) / pxPerInch,
   //   };
   // }
+  robotEl: HTMLElement;
+
   /**
    * in inches of physical field
    * @returns {PhysicalPos}
    */
   getIRLPos() {
-    return pos;
+    return this.#pos;
   }
   /**
    * in pixels relative to window
    * @returns {AbsoluteCoord}
    */
   getAbsPos() {
-    const robotBounds = this.robot.getBoundingClientRect();
-    const halfRobotWidth = this.robot.offsetWidth / 2;
+    const robotBounds = this.robotEl.getBoundingClientRect();
+    const halfRobotWidth = this.robotEl.offsetWidth / 2;
     return {
+      ...this.#setPos,
       x: robotBounds.left + halfRobotWidth,
       y: robotBounds.top + halfRobotWidth,
     };
   }
   /**
    * move bot to IRL pos
-   * @param {PhysicalPos} pos
+   * @param {PhysicalPos | PhysicalCoord | {heading: number}} pos
    */
-  goTo(pos = this.#pos) {
+  goTo(pos: any = this.#pos, opts: { duration: number } = { duration: 200 }) {
+    pos = new PhysicalPos({ ...this.#pos, ...pos }, this.#pos._dimProvider)
+    console.log(pos);
     if (
-      (pos.x == undefined || pos.x == this.#pos.x) &&
-      (pos.y == undefined || pos.y == this.#pos.y) &&
-      (pos.heading == undefined || pos.heading == this.#pos.heading)
+      (pos.x == this.#pos.x) &&
+      (pos.y == this.#pos.y) &&
+      (pos.heading == this.#pos.heading)
     )
       throw "no change in robot position";
-    this.#setPos(pos);
+    this.#setPos(pos, opts);
   }
 
   /**
    * reset position to last recorded position (for resizing)
    */
-  resetPos() {
-    this.#setPos(this.#pos);
+  resetPos(opts: { duration: number } = { duration: 200 }) {
+    this.#setPos(this.#pos, opts);
   }
 
   /**
    * move bot to IRL pos
    * @param {PhysicalPos} pos
    */
-  #setPos(pos) {
+  #setPos(pos: PhysicalPos, opts: { duration: number } = { duration: 200 }) {
     // if (pos.heading != undefined) this.#pos.heading = pos.heading;
     // if (pos.x != undefined) this.#pos.x = pos.x;
     // if (pos.y != undefined) this.#pos.y = pos.y;
-    this.#pos = { ...this.#pos, ...pos };
+    this.#pos = pos;
 
     this.#pos.heading = Math.round(this.#pos.heading);
 
     const horizontalRadius = Math.ceil(
       ((Math.sqrt(2 * Math.pow(this.#radiusIRL, 2)) - this.#radiusIRL) *
         (1 - Math.cos((4 * this.#pos.heading * Math.PI) / 180))) /
-        2 +
-        this.#radiusIRL
+      2 +
+      this.#radiusIRL
     );
 
     // maximum possible x pos for bot
@@ -128,28 +124,29 @@ export class Robot {
     this.#pos.x = Math.max(Math.min(Math.round(this.#pos.x), maxX), horizontalRadius);
     this.#pos.y = Math.max(Math.min(Math.round(this.#pos.y), maxX), horizontalRadius);
 
-    // console.log(robotBounds);
+    console.log(pos);
     const relPos = pos.toRelative();
-    const transform = `translate(${relPos.x}px, ${
-      relPos.y
-    }px)rotate(${(this.#pos.heading %= 360)}deg)`;
-    this.robot.animate([{ transform: this.robot.style.transform }, { transform }], {
+    const transform = `translate(${relPos.x}px, ${relPos.y
+      }px)rotate(${(this.#pos.heading %= 360)}deg)`;
+    this.robotEl.animate([{ transform: this.robotEl.style.transform }, { transform }], {
       duration: opts.duration,
     });
     // @ts-ignore
-    return (this.robot.style.transform = transform);
+    return (this.robotEl.style.transform = transform);
   }
-
+  #pos: PhysicalPos;
+  // #lengthIRL;
+  #radiusIRL: number;
   /**
    * @param {Element} element
    * @param {PhysicalPos} pos
    * @param {{followCursor: boolean}} opts
    */
-  constructor(element, pos, opts = { followCursor: true }) {
-    this.robot = element;
+  constructor(element: HTMLElement, pos: PhysicalPos, /* opts = { followCursor: true } */) {
+    this.robotEl = element;
     this.#pos = pos;
     // could be changed for custom robot length
-    this.#lengthIRL = 18;
+    // this.#lengthIRL = 18;
     this.#radiusIRL = 18 / 2; // half or length
   }
 }

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "module": "es6",
+    "target": "es2020",
+    "lib": ["es2020", "dom"],
+    "outDir": "../../out/webview/"
+  },
+  "include": ["./**/*"]
+}

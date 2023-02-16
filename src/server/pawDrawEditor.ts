@@ -354,7 +354,7 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 	private getHtmlForWebview(webview: vscode.Webview): string {
 		// Local path to script and css for the webview
 		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(
-			this._context.extensionUri, 'media', 'pawDraw.js'));
+			this._context.extensionUri, "out", 'webview', 'pawDraw.js'));
 
 		const styleResetUri = webview.asWebviewUri(vscode.Uri.joinPath(
 			this._context.extensionUri, 'media', 'reset.css'));
@@ -365,8 +365,8 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 		const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(
 			this._context.extensionUri, 'media', 'pawDraw.css'));
 
-		const robotPngUri = webview.asWebviewUri(vscode.Uri.joinPath(
-			this._context.extensionUri, 'media', 'robot.png'));
+		// const robotPngUri = webview.asWebviewUri(vscode.Uri.joinPath(
+		// 	this._context.extensionUri, 'media', 'robot.png'));
 
 		// Use a nonce to whitelist which scripts can be run
 		const nonce = getNonce();
@@ -408,7 +408,7 @@ ${""
 			// 	<button data-color="blue" class="blue" title="Blue"></button>
 			// </div>
 			}
-				<script nonce="${nonce}" src="${scriptUri}"></script>
+				<script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;
 	}

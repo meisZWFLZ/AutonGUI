@@ -5,7 +5,7 @@ class Coordinate {
    * @param {number} x
    * @param {number} y
    */
-  constructor(x: number, y: number) {
+  constructor({ x, y }: { x: number, y: number }) {
     this.x = x;
     this.y = y;
   }
@@ -18,43 +18,58 @@ interface Rotatable {
 
 class Position extends Coordinate implements Rotatable {
   public heading: number;
-  constructor(x: number, y: number, heading: number) {
-    super(x, y);
-    this.heading = heading;
+  constructor(pos: { x: number, y: number, heading: number }) {
+    super(pos);
+    this.heading = pos.heading;
   }
 }
 /** responsible for retrieving the dimensions of elements required to convert coordinate systems */
-abstract class _DimensionProvider {
+abstract class DimensionProvider {
   /**
    * gets the offset width of the robot element
    * @example robotEl.offsetWidth
    */
   public abstract get robotOffsetWidth(): number;
   /**
-   * gets the width of field element
+   * gets the width of field element in pixels
    * @example field.getBoundingClientRect().width;
    */
   public abstract get fieldWidth(): number;
   /**
    * gets the coordinate of the top left corner of field relative to the view port 
-   * @example field.getBoundClientRect()
+   * @example field.getBoundingClientRect()
   */
   public abstract get fieldCoord(): Coordinate;
 }
 abstract class ConvertibleCoordinate extends Coordinate {
-  public static DimensionProvider = _DimensionProvider;
-  protected dimProvider: _DimensionProvider;
+  public _dimProvider: DimensionProvider;
 
-  /** @see _DimensionProvider */
-  public constructor(x: number, y: number, dimProvider: _DimensionProvider) {
-    super(x, y);
-    this.dimProvider = dimProvider;
+  /**
+   *  @see DimensionProvider
+   */
+  public constructor(coord: Coordinate, dimProvider: DimensionProvider) {
+    super(coord);
+    this._dimProvider = dimProvider;
   }
   public abstract toRelative(): Relative;
   public abstract toAbsolute(): Absolute;
   public abstract toPhysical(): Physical;
 
-
+  public static Generator = class {
+    protected dimProvider: DimensionProvider;
+    constructor(dimProvider: DimensionProvider) {
+      this.dimProvider = dimProvider;
+    }
+    public newRelative(coord: Coordinate): Relative {
+      return new Relative(coord, this.dimProvider);
+    }
+    public newAbsolute(coord: Coordinate): Absolute {
+      return new Absolute(coord, this.dimProvider);
+    }
+    public newPhysical(coord: Coordinate): Physical {
+      return new Physical(coord, this.dimProvider);
+    }
+  };
 }
 /** length of physical field in inches */
 const irlFieldLength: number = 2 * 6 * 12;
@@ -74,16 +89,16 @@ class Relative extends ConvertibleCoordinate {
     return this;
   }
   public toAbsolute(): Absolute {
-    const fieldCoord = this.dimProvider.fieldCoord;
+    const fieldCoord = this._dimProvider.fieldCoord;
     return {
       ...this,
       x: this.x + fieldCoord.x,
-      y: this.dimProvider.fieldWidth + fieldCoord.y - this.y
+      y: this._dimProvider.fieldWidth + fieldCoord.y - this.y
     }
   }
   public toPhysical(): Physical {
-    const pxPerInch = this.dimProvider.fieldWidth / irlFieldLength;
-    const halfRobotWidth = this.dimProvider.robotOffsetWidth / 2;
+    const pxPerInch = this._dimProvider.fieldWidth / irlFieldLength;
+    const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
     return {
       ...this,
       x: (this.x + halfRobotWidth) / pxPerInch,
@@ -98,11 +113,11 @@ class Relative extends ConvertibleCoordinate {
 */
 class Absolute extends ConvertibleCoordinate {
   public toRelative(): Relative {
-    const fieldCoord = this.dimProvider.fieldCoord;
+    const fieldCoord = this._dimProvider.fieldCoord;
     return {
       ...this,
       x: this.x - fieldCoord.x,
-      y: this.y - this.dimProvider.fieldWidth - fieldCoord.y
+      y: this.y - this._dimProvider.fieldWidth - fieldCoord.y
     }
   }
   /**
@@ -122,8 +137,8 @@ class Absolute extends ConvertibleCoordinate {
 */
 class Physical extends ConvertibleCoordinate {
   public toRelative(): Relative {
-    const pxPerInch = this.dimProvider.fieldWidth / irlFieldLength;
-    const halfRobotWidth = this.dimProvider.robotOffsetWidth / 2;
+    const pxPerInch = this._dimProvider.fieldWidth / irlFieldLength;
+    const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
     return {
       ...this,
       x: this.x * pxPerInch - halfRobotWidth,
@@ -143,25 +158,37 @@ class Physical extends ConvertibleCoordinate {
 };
 class RelativePos extends Relative implements Rotatable {
   public heading: number;
-  constructor(x: number, y: number, dimProvider: _DimensionProvider, heading: number) {
-    super(x, y, dimProvider);
-    this.heading = heading;
+  constructor(pos: { x: number, y: number, heading: number }, dimProvider: DimensionProvider) {
+    super(pos, dimProvider);
+    this.heading = pos.heading;
   }
 }
 class AbsolutePos extends Absolute implements Rotatable {
   public heading: number;
-  constructor(x: number, y: number, dimProvider: _DimensionProvider, heading: number) {
-    super(x, y, dimProvider);
-    this.heading = heading;
+  constructor(pos: { x: number, y: number, heading: number }, dimProvider: DimensionProvider) {
+    super(pos, dimProvider);
+    this.heading = pos.heading;
   }
 }
 class PhysicalPos extends Physical implements Rotatable {
   public heading: number;
-  constructor(x: number, y: number, dimProvider: _DimensionProvider, heading: number) {
-    super(x, y, dimProvider);
-    this.heading = heading;
+  constructor(pos: { x: number, y: number, heading: number }, dimProvider: DimensionProvider) {
+    super(pos, dimProvider);
+    this.heading = pos.heading;
   }
 }
+// export default {
+//   Coordinate,
+//   Position,
+//   ConvertibleCoordinate,
+//   RelativeCoord: Relative,
+//   AbsoluteCoord: Absolute,
+//   PhysicalCoord: Physical,
+//   RelativePos,
+//   AbsolutePos,
+//   PhysicalPos,
+//   default: 1,
+// };
 
 export {
   Coordinate,
@@ -173,4 +200,6 @@ export {
   RelativePos,
   AbsolutePos,
   PhysicalPos,
+  DimensionProvider
 }
+

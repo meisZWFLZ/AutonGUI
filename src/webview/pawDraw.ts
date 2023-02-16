@@ -1,46 +1,68 @@
 // @ts-check
 
-// This script is run within the webview itself
-// (function () {
-
-import { Robot } from "./robot";
+import { AbsoluteCoord, ConvertibleCoordinate, DimensionProvider, PhysicalCoord, PhysicalPos } from "./coordinates.js";
+import { Robot } from "./robot.js";
 // @ts-ignore
 const vscode = acquireVsCodeApi();
 
-/**
- * @param {Uint8Array} initialContent
- * @return {Promise<HTMLImageElement>}
- */
-async function loadImageFromData(initialContent) {
-  const blob = new Blob([initialContent], { type: "image/png" });
-  const url = URL.createObjectURL(blob);
-  try {
-    const img = document.createElement("img");
-    img.crossOrigin = "anonymous";
-    img.src = url;
-    await new Promise((resolve, reject) => {
-      img.onload = resolve;
-      img.onerror = reject;
-    });
-    return img;
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
+// /**
+//  * @param {Uint8Array} initialContent
+//  * @return {Promise<HTMLImageElement>}
+//  */
+// async function loadImageFromData(initialContent) {
+//   const blob = new Blob([initialContent], { type: "image/png" });
+//   const url = URL.createObjectURL(blob);
+//   try {
+//     const img = document.createElement("img");
+//     img.crossOrigin = "anonymous";
+//     img.src = url;
+//     await new Promise((resolve, reject) => {
+//       img.onload = resolve;
+//       img.onerror = reject;
+//     });
+//     return img;
+//   } finally {
+//     URL.revokeObjectURL(url);
+//   }
+// }
 
 class PawDrawEditor {
-  constructor(/** @type {HTMLElement} */ parent) {
+  ready: boolean;
+  editable: boolean;
+  dimProvider: DimensionProvider;
+  robot: Robot;
+  startPos: PhysicalPos | null;
+
+  constructor(/** @type {HTMLElement} */ parent: HTMLElement) {
     this.ready = false;
 
     this.editable = false;
 
-    // this.robot = document.querySelector(".robot");\
-    const robotEl = document.querySelector(".robot");
-    if (robotEl) this.robot = new Robot(robotEl, { x: 0, y: 0, heading: 0 });
-    else throw "no robot";
+    const field = document.querySelector(".field");
+    if (!field) throw "no field";
 
-    // this.field = document.querySelector(".field");
-    // if (!this.field) throw "no field";
+    const robotEl: HTMLElement | null = document.querySelector(".robot");
+    if (robotEl) {
+      /** used for initializing new Convertible Coordinates */
+      this.dimProvider = {
+        get robotOffsetWidth() {
+          // @ts-ignore
+          return robotEl.offsetWidth;
+        },
+        get fieldWidth() {
+          // @ts-ignore
+          return field.getBoundingClientRect().width;
+        },
+        get fieldCoord() {
+          return field.getBoundingClientRect();
+        },
+      };
+      // this.convertGenerator = new ConvertibleCoordinate.Generator(this.dimProvider);
+      this.robot = new Robot(
+        robotEl,
+        new PhysicalPos({ x: 0, y: 0, heading: 0 }, this.dimProvider)
+      );
+    } else throw "no robot";
 
     // this.robotPos = { x: 0, y: 0, heading: 0 };
 
@@ -78,40 +100,40 @@ class PawDrawEditor {
   // 	return previous;
   // }
 
-  setEditable(editable) {
+  setEditable(editable: boolean) {
     this.editable = editable;
-    const colorButtons = /** @type {NodeListOf<HTMLButtonElement>} */ (
+    const colorButtons: NodeListOf<HTMLButtonElement> = (
       document.querySelectorAll(".drawing-controls button")
     );
-    for (const colorButton of colorButtons) {
+    for (const colorButton of Array.from(colorButtons)) {
       colorButton.disabled = !editable;
     }
   }
-  /**
-   * @returns {{x: number, y: number}};
-   */
-  getLocalFieldPos(/** @type {{x: number, y: number}} */ globalPos) {
-    const fieldLength = 2 * 6 * 12; // field length in inches
+  // /**
+  //  * @returns {{x: number, y: number}};
+  //  */
+  // getLocalFieldPos(/** @type {{x: number, y: number}} */ globalPos) {
+  //   const fieldLength = 2 * 6 * 12; // field length in inches
 
-    const fieldBounds = this.field.getBoundingClientRect();
+  //   const fieldBounds = this.field.getBoundingClientRect();
 
-    // get center of robot in px in relation to field
-    let pos = {
-      x: globalPos.x - fieldBounds.x,
-      y: fieldBounds.bottom - globalPos.y,
-    };
+  //   // get center of robot in px in relation to field
+  //   let pos = {
+  //     x: globalPos.x - fieldBounds.x,
+  //     y: fieldBounds.bottom - globalPos.y,
+  //   };
 
-    // translate to inches
-    pos.x /= fieldBounds.width / fieldLength;
-    pos.y /= fieldBounds.height / fieldLength;
+  //   // translate to inches
+  //   pos.x /= fieldBounds.width / fieldLength;
+  //   pos.y /= fieldBounds.height / fieldLength;
 
-    // pos.x = Math.round(pos.x / 3) * 3;
-    // pos.y = Math.round(pos.y / 3) * 3;
+  //   // pos.x = Math.round(pos.x / 3) * 3;
+  //   // pos.y = Math.round(pos.y / 3) * 3;
 
-    // console.log(pos);
-    return pos;
-  }
-  
+  //   // console.log(pos);
+  //   return pos;
+  // }
+
   // /**
   //  * @returns {{x: number, y: number}};
   //  */
@@ -279,30 +301,36 @@ class PawDrawEditor {
     });
   }
 
-  _initElements(/** @type {HTMLElement} */ parent) {
-    let mouseMoveListener = ({ clientX: x, clientY: y }) => {
+  _initElements(/** @type {HTMLElement} */ parent: HTMLElement) {
+    let mouseMoveListener = (mouseClientPos: { x: number, y: number }) => {
       try {
         // let mousePos = this.getLocalFieldPos({ x, y });
-        let mousePos = this.getLocalFieldPos({ x, y });
+        let mousePos: PhysicalCoord = new AbsoluteCoord(mouseClientPos, this.dimProvider).toPhysical();
         mousePos.x = Math.round(mousePos.x);
         mousePos.y = Math.round(mousePos.y);
-        this.setRobotPosition(mousePos);
-      } catch {}
+        // this.setRobotPosition(mousePos);
+        this.robot.goTo(mousePos);
+      } catch { }
     };
-    let mouseRotateListener = ({ clientX: x, clientY: y }) => {
-      const robotCenter = this.getRobotAbsoluteCenter();
+    let mouseRotateListener = ({ x, y }: { x: number, y: number }) => {
+      // const robotCenter = this.getRobotAbsoluteCenter();
+      const robotCenter = this.robot.getAbsPos();
       // console.log({ x, y });
       try {
-        this.setRobotPosition({
+        // this.setRobotPosition({
+        this.robot.goTo({
+          // x: undefined,
+          // y: undefined,
           // ...this.robotPos,
           heading: Math.round(
             Math.atan2(x - robotCenter.x, robotCenter.y - y) * (180 / Math.PI)
             //   /  10
           ) /* * 10, */,
         });
-      } catch {}
+      } catch { }
     };
-    this.robot.addEventListener("mousedown", (ev) => {
+    // this.robot.addEventListener("mousedown", (ev) => {
+    this.robot.robotEl.addEventListener("mousedown", (ev) => {
       // @ts-ignore
       if (!ev.altKey) {
         // case 0: //primary (left)
@@ -331,7 +359,8 @@ class PawDrawEditor {
       }
     });
     window.addEventListener("resize", () => {
-      this.setRobotPosition({}, { check: false });
+      // this.setRobotPosition({}, { check: false });
+      this.robot.resetPos();
       console.log("resize");
     });
 
@@ -342,9 +371,9 @@ class PawDrawEditor {
         let dir = null;
         switch (ev.key.toLowerCase()) {
           case "r":
-            return this.setRobotPosition({
-              ...this.robotPos,
-              heading: this.robotPos.heading + (ev.shiftKey ? -90 : 90),
+            return this.robot.goTo({
+              // ...this.robot.getIRLPos(),
+              heading: this.robot.getIRLPos().heading + (ev.shiftKey ? -90 : 90),
             });
           case "arrowup":
           case "w":
@@ -358,16 +387,19 @@ class PawDrawEditor {
           case "arrowright":
           case "d":
             if (!dir) dir = { x: 1, y: 0 };
-            return this.setRobotPosition({
-              ...this.robotPos,
-              x: this.robotPos.x + 3 * dir.x,
-              y: this.robotPos.y + 3 * dir.y,
+            let currRobotPos = this.robot.getIRLPos();
+            // return this.setRobotPosition({
+            return this.robot.goTo({
+              ...currRobotPos,
+              x: currRobotPos.x + 3 * dir.x,
+              y: currRobotPos.y + 3 * dir.y,
             });
           case "c":
             try {
-              this.setRobotPosition({ heading: 0 });
+              // this.setRobotPosition({ heading: 0 });
+              this.robot.goTo({ heading: 0 });
               this.updateRobotPosition();
-            } catch {}
+            } catch { }
             return;
         }
       }
@@ -505,7 +537,8 @@ class PawDrawEditor {
     // let str = data.map(String.fromCharCode).join("");
     if (!this.startPos) this.startPos = pos;
 
-    if (pos) this.setRobotPosition(pos);
+    // if (pos) this.setRobotPosition(pos);
+    if (pos) this.robot.goTo(pos);
   }
 
   // /**
@@ -543,7 +576,7 @@ class PawDrawEditor {
     //   outCanvas.toBlob(resolve, "image/png");
     // });
 
-    return Array.from(JSON.stringify(this.robotPos)).map((e) => e.charCodeAt(0));
+    return Array.from(JSON.stringify(this.robot.getIRLPos())).map((e) => e.charCodeAt(0));
   }
 }
 
