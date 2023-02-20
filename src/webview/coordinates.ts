@@ -10,7 +10,6 @@ class Coordinate {
     this.y = y;
   }
 }
-
 interface Rotatable {
   get heading(): number;
   set heading(a: number);
@@ -40,36 +39,49 @@ abstract class DimensionProvider {
    * @example field.getBoundingClientRect()
   */
   public abstract get fieldCoord(): Coordinate;
+  public toJSON() {
+    return undefined;
+  }
 }
+
 abstract class ConvertibleCoordinate extends Coordinate {
   public _dimProvider: DimensionProvider;
-
   /**
    *  @see DimensionProvider
-   */
+  */
   public constructor(coord: Coordinate, dimProvider: DimensionProvider) {
     super(coord);
     this._dimProvider = dimProvider;
   }
+
   public abstract toRelative(): Relative;
   public abstract toAbsolute(): Absolute;
   public abstract toPhysical(): Physical;
 
-  public static Generator = class {
-    protected dimProvider: DimensionProvider;
-    constructor(dimProvider: DimensionProvider) {
-      this.dimProvider = dimProvider;
-    }
-    public newRelative(coord: Coordinate): Relative {
-      return new Relative(coord, this.dimProvider);
-    }
-    public newAbsolute(coord: Coordinate): Absolute {
-      return new Absolute(coord, this.dimProvider);
-    }
-    public newPhysical(coord: Coordinate): Physical {
-      return new Physical(coord, this.dimProvider);
-    }
-  };
+  // public static Generator = class {
+  //   protected dimProvider: DimensionProvider;
+  //   constructor(dimProvider: DimensionProvider) {
+  //     this.dimProvider = dimProvider;
+  //   }
+  //   public newRelative(coord: Coordinate): Relative {
+  //     return new Relative(coord, this.dimProvider);
+  //   }
+  //   public newAbsolute(coord: Coordinate): Absolute {
+  //     return new Absolute(coord, this.dimProvider);
+  //   }
+  //   public newPhysical(coord: Coordinate): Physical {
+  //     return new Physical(coord, this.dimProvider);
+  //   }
+  // };
+  // public toJSON() {
+  //   const out = Object.fromEntries(Object.entries({ ...this }).filter((e: [string, any]) => {
+  //     console.log({ e, dimP: this._dimProvider });
+  //     // return (typeof e[1] != "object") || Object.entries(e[1]).some(f => DimensionProvider.prototype);
+  //     return !(e[1] instanceof DimensionProvider);
+  //   }));
+  //   console.log(out);
+  //   return out;
+  // }
 }
 /** length of physical field in inches */
 const irlFieldLength: number = 2 * 6 * 12;
@@ -77,8 +89,8 @@ const irlFieldLength: number = 2 * 6 * 12;
 // ex - @origin
 
 /**
- * Measures pixels relative to field html element.
- * The bottom left of field is the origin (Blue goal corner for Spin Up).
+ * Measures top left of robot in pixels relative to field html element.
+ * The top left of field is the origin.
 */
 class Relative extends ConvertibleCoordinate {
   /**
@@ -90,35 +102,73 @@ class Relative extends ConvertibleCoordinate {
   }
   public toAbsolute(): Absolute {
     const fieldCoord = this._dimProvider.fieldCoord;
-    return {
+    return new Absolute({
       ...this,
       x: this.x + fieldCoord.x,
       y: this._dimProvider.fieldWidth + fieldCoord.y - this.y
-    }
+    }, this._dimProvider);
+    // return {
+    //   ...this,
+    //   x: this.x + fieldCoord.x,
+    //   y: this._dimProvider.fieldWidth + fieldCoord.y - this.y
+    // }
   }
   public toPhysical(): Physical {
     const pxPerInch = this._dimProvider.fieldWidth / irlFieldLength;
     const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
-    return {
+    // console.log(halfRobotWidth);
+    return new Physical({
       ...this,
       x: (this.x + halfRobotWidth) / pxPerInch,
-      y: (this.y + halfRobotWidth) / pxPerInch,
-    };
+      y: (-this.y + halfRobotWidth) / pxPerInch,
+    }, this._dimProvider);
+    // return {
+    //   ...this,
+    //   x: (this.x + halfRobotWidth) / pxPerInch,
+    //   y: (-this.y + halfRobotWidth) / pxPerInch,
+    // };
   }
-
+  /** untested */
+  public static fromCenter(coord: Coordinate, dimProvider: DimensionProvider): Relative {
+    const halfRobotWidth = dimProvider.robotOffsetWidth / 2;
+    return new Relative(
+      {
+        ...coord,
+        x: coord.x - halfRobotWidth,
+        y: coord.y - halfRobotWidth,
+      },
+      dimProvider,
+    );
+  };
+  /** untested */
+  public getCenter(): Coordinate {
+    const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
+    return new Coordinate(
+      {
+        ...this,
+        x: this.x + halfRobotWidth,
+        y: this.y + halfRobotWidth,
+      }
+    );
+  }
 };
 /**
- * Measures pixels relative to viewport.
+ * Measures top left of robot in pixels relative to viewport.
  * The top left of viewport is the origin.
 */
 class Absolute extends ConvertibleCoordinate {
   public toRelative(): Relative {
     const fieldCoord = this._dimProvider.fieldCoord;
-    return {
+    return new Relative({
       ...this,
       x: this.x - fieldCoord.x,
       y: this.y - this._dimProvider.fieldWidth - fieldCoord.y
-    }
+    }, this._dimProvider);
+    // return {
+    //   ...this,
+    //   x: this.x - fieldCoord.x,
+    //   y: this.y - this._dimProvider.fieldWidth - fieldCoord.y
+    // }
   }
   /**
    * @deprecated conversion to self
@@ -130,20 +180,48 @@ class Absolute extends ConvertibleCoordinate {
   public toPhysical(): Physical {
     return this.toRelative().toPhysical();
   }
+  public static fromCenter(coord: Coordinate, dimProvider: DimensionProvider): Absolute {
+    const halfRobotWidth = dimProvider.robotOffsetWidth / 2;
+    return new Absolute(
+      {
+        ...coord,
+        x: coord.x - halfRobotWidth,
+        y: coord.y + halfRobotWidth,
+      },
+      dimProvider,
+    );
+  };
+  /** untested */
+  public getCenter(): Coordinate {
+    const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
+    console.log(this)
+    return new Coordinate(
+      {
+        ...this,
+        x: this.x + halfRobotWidth,
+        y: this.y - halfRobotWidth,
+      }
+    );
+  }
 };
 /**
- * Measures inches relative to physical field.
+ * Measures center of robot in inches relative to physical field.
  * The bottom left of field is the origin (Blue goal corner for Spin Up).
 */
 class Physical extends ConvertibleCoordinate {
   public toRelative(): Relative {
     const pxPerInch = this._dimProvider.fieldWidth / irlFieldLength;
     const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
-    return {
+    return new Relative({
       ...this,
       x: this.x * pxPerInch - halfRobotWidth,
-      y: this.y * pxPerInch - halfRobotWidth,
-    };
+      y: -(this.y * pxPerInch - halfRobotWidth),
+    }, this._dimProvider);
+    // return {
+    //   ...this,
+    //   x: this.x * pxPerInch - halfRobotWidth,
+    //   y: -(this.y * pxPerInch - halfRobotWidth),
+    // };
   }
   public toAbsolute(): Absolute {
     return this.toRelative().toAbsolute();

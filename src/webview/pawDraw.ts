@@ -44,18 +44,18 @@ class PawDrawEditor {
     const robotEl: HTMLElement | null = document.querySelector(".robot");
     if (robotEl) {
       /** used for initializing new Convertible Coordinates */
-      this.dimProvider = {
+      this.dimProvider = new class extends DimensionProvider {
         get robotOffsetWidth() {
           // @ts-ignore
           return robotEl.offsetWidth;
-        },
+        }
         get fieldWidth() {
           // @ts-ignore
           return field.getBoundingClientRect().width;
-        },
+        }
         get fieldCoord() {
           return field.getBoundingClientRect();
-        },
+        }
       };
       // this.convertGenerator = new ConvertibleCoordinate.Generator(this.dimProvider);
       this.robot = new Robot(
@@ -305,17 +305,17 @@ class PawDrawEditor {
     let mouseMoveListener = (mouseClientPos: { x: number, y: number }) => {
       try {
         // let mousePos = this.getLocalFieldPos({ x, y });
-        let mousePos: PhysicalCoord = new AbsoluteCoord(mouseClientPos, this.dimProvider).toPhysical();
+        let mousePos: PhysicalCoord = AbsoluteCoord.fromCenter(mouseClientPos, this.dimProvider).toPhysical();
         mousePos.x = Math.round(mousePos.x);
         mousePos.y = Math.round(mousePos.y);
         // this.setRobotPosition(mousePos);
         this.robot.goTo(mousePos);
-      } catch { }
+      } catch (err) { /* console.log(err);  */ }
     };
     let mouseRotateListener = ({ x, y }: { x: number, y: number }) => {
       // const robotCenter = this.getRobotAbsoluteCenter();
-      const robotCenter = this.robot.getAbsPos();
-      // console.log({ x, y });
+      const robotCenter = this.robot.getAbsPos().getCenter();
+      // console.log(JSON.stringify({ mouse: { x, y }, robot: robotCenter }));
       try {
         // this.setRobotPosition({
         this.robot.goTo({
@@ -581,7 +581,7 @@ class PawDrawEditor {
 }
 
 // @ts-ignore
-const editor = new PawDrawEditor(document.querySelector(".drawing-canvas"));
+export const editor = new PawDrawEditor(document.querySelector(".drawing-canvas"));
 
 // Handle messages from the extension
 window.addEventListener("message", async (e) => {

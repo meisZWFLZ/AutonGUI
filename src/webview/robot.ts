@@ -1,4 +1,4 @@
-import { AbsoluteCoord, PhysicalCoord, PhysicalPos, RelativeCoord } from "./coordinates.js";
+import { AbsoluteCoord, AbsolutePos, PhysicalCoord, PhysicalPos, RelativeCoord } from "./coordinates.js";
 // console.log(Coordinates)
 // let { AbsoluteCoord, PhysicalCoord, PhysicalPos } = Coordinates;
 /* 
@@ -60,21 +60,21 @@ export class Robot {
    * in inches of physical field
    * @returns {PhysicalPos}
    */
-  getIRLPos() {
+  getIRLPos(): PhysicalPos {
     return this.#pos;
   }
   /**
    * in pixels relative to window
-   * @returns {AbsoluteCoord}
+   * @returns {AbsolutePos}
    */
-  getAbsPos() {
+  getAbsPos(): AbsoluteCoord {
     const robotBounds = this.robotEl.getBoundingClientRect();
     const halfRobotWidth = this.robotEl.offsetWidth / 2;
-    return {
+    return AbsolutePos.fromCenter({
       ...this.#setPos,
       x: robotBounds.left + halfRobotWidth,
       y: robotBounds.top + halfRobotWidth,
-    };
+    }, this.#pos._dimProvider);
   }
   /**
    * move bot to IRL pos
@@ -82,7 +82,7 @@ export class Robot {
    */
   goTo(pos: any = this.#pos, opts: { duration: number } = { duration: 200 }) {
     pos = new PhysicalPos({ ...this.#pos, ...pos }, this.#pos._dimProvider)
-    console.log(pos);
+    // console.log(pos);
     if (
       (pos.x == this.#pos.x) &&
       (pos.y == this.#pos.y) &&
@@ -103,7 +103,7 @@ export class Robot {
    * move bot to IRL pos
    * @param {PhysicalPos} pos
    */
-  #setPos(pos: PhysicalPos, opts: { duration: number } = { duration: 200 }) {
+  #setPos(pos: PhysicalPos, opts: { duration: number } = { duration: 200 }): string {
     // if (pos.heading != undefined) this.#pos.heading = pos.heading;
     // if (pos.x != undefined) this.#pos.x = pos.x;
     // if (pos.y != undefined) this.#pos.y = pos.y;
@@ -124,7 +124,7 @@ export class Robot {
     this.#pos.x = Math.max(Math.min(Math.round(this.#pos.x), maxX), horizontalRadius);
     this.#pos.y = Math.max(Math.min(Math.round(this.#pos.y), maxX), horizontalRadius);
 
-    console.log(pos);
+    // console.log(pos);
     const relPos = pos.toRelative();
     const transform = `translate(${relPos.x}px, ${relPos.y
       }px)rotate(${(this.#pos.heading %= 360)}deg)`;
