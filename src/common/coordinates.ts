@@ -194,7 +194,7 @@ class Absolute extends ConvertibleCoordinate {
   /** untested */
   public getCenter(): Coordinate {
     const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
-    console.log(this)
+    // console.log(this)
     return new Coordinate(
       {
         ...this,
@@ -278,6 +278,7 @@ export {
   RelativePos,
   AbsolutePos,
   PhysicalPos,
-  DimensionProvider
+  DimensionProvider,
+  Rotatable
 }
 

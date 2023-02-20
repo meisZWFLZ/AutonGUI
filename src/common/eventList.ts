@@ -1,13 +1,21 @@
 import { EventEmitter } from "events";
+export enum LIST_ACTION_TYPE {
+	APPEND,
+	INSERT,
+	REPLACE,
+	REMOVE,
+}
 
-abstract class ListAction<T> {
+export abstract class ListAction<T> {
+	constructor(public type: LIST_ACTION_TYPE) { };
 	abstract do(list: T[]): void;
 	abstract undo(list: T[]): void;
 }
-namespace ListAction {
+export namespace ListAction {
 	export class Append<T> extends ListAction<T> {
+		public override type: LIST_ACTION_TYPE.APPEND = LIST_ACTION_TYPE.APPEND;
 		constructor(private element: T) {
-			super();
+			super(LIST_ACTION_TYPE.APPEND);
 		}
 
 		do(list: T[]): void {
@@ -20,8 +28,9 @@ namespace ListAction {
 	}
 
 	export class Insert<T> extends ListAction<T> {
+		public override type: LIST_ACTION_TYPE.INSERT = LIST_ACTION_TYPE.INSERT;
 		constructor(private index: number, private element: T) {
-			super();
+			super(LIST_ACTION_TYPE.INSERT);
 		}
 
 		do(list: T[]): void {
@@ -34,9 +43,10 @@ namespace ListAction {
 	}
 
 	export class Replace<T> extends ListAction<T> {
+		public override type: LIST_ACTION_TYPE.REPLACE = LIST_ACTION_TYPE.REPLACE;
 		oldElement: T[] | undefined;
 		constructor(private index: number, private newElement: T) {
-			super();
+			super(LIST_ACTION_TYPE.REPLACE);
 		}
 
 		do(list: T[]): void {
@@ -51,10 +61,11 @@ namespace ListAction {
 	}
 
 	export class Remove<T> extends ListAction<T> {
+		public override type: LIST_ACTION_TYPE.REMOVE = LIST_ACTION_TYPE.REMOVE;
 		private removedElements: T[] | undefined;
 
 		constructor(private index: number, private count: number) {
-			super();
+			super(LIST_ACTION_TYPE.REMOVE);
 		}
 
 		do(list: T[]): void {
@@ -77,6 +88,10 @@ export default class EventList<T> extends EventEmitter {
 	private undoStack: ListAction<T>[] = [];
 	private redoStack: ListAction<T>[] = [];
 
+	public getEdits(): ListAction<T>[] {
+		return this.undoStack;
+	}
+
 	private performNewAction(action: ListAction<T>) {
 		action.do(this.list);
 		this.undoStack.push(action);
@@ -86,16 +101,16 @@ export default class EventList<T> extends EventEmitter {
 	constructor(list: T[]) {
 		super();
 		this.list = list;
-		this.on("add", (element: T) =>
+		this.on("add", ({ element }: { element: T }) =>
 			this.performNewAction(new ListAction.Append<T>(element))
 		);
-		this.on("insert", (index: number, element: T) =>
-			this.performNewAction(new ListAction.Insert<T>(index, element))
+		this.on("insert", ({ el, index }: { el: T, index: number }) =>
+			this.performNewAction(new ListAction.Insert<T>(index, el))
 		);
-		this.on("replace", (index: number, newElement: T) =>
-			this.performNewAction(new ListAction.Replace<T>(index, newElement))
+		this.on("replace", ({ el, index }: { el: T, index: number }) =>
+			this.performNewAction(new ListAction.Replace<T>(index, el))
 		);
-		this.on("remove", (index: number, count: number = 1) =>
+		this.on("remove", ({ count, index }: { count: number, index: number }) =>
 			this.performNewAction(new ListAction.Remove<T>(index, count))
 		);
 		this.on("get", ({ index = 0, all = false, count = 1 }: { index?: number, all?: boolean, count?: number }): void => {
@@ -103,6 +118,7 @@ export default class EventList<T> extends EventEmitter {
 			if (all)
 				response = list;
 			else response = list.splice(index, index + count)
+			this.emit("get-response", response);
 		})
 	}
 
@@ -142,9 +158,4 @@ export default class EventList<T> extends EventEmitter {
 			this.undoStack.push(action);
 		}
 	}
-}
-
-export {
-	EventList,
-	ListAction
 }

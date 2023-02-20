@@ -1,7 +1,9 @@
 // @ts-check
 
-import { AbsoluteCoord, ConvertibleCoordinate, DimensionProvider, PhysicalCoord, PhysicalPos } from "./coordinates.js";
+import { AbsoluteCoord, ConvertibleCoordinate, DimensionProvider, PhysicalCoord, PhysicalPos } from "../common/coordinates";
 import { Robot } from "./robot.js";
+import Message from "../common/message"
+
 // @ts-ignore
 const vscode = acquireVsCodeApi();
 
@@ -293,12 +295,14 @@ class PawDrawEditor {
   // }
 
   updateRobotPosition() {
-    // console.log("update robot pos");
-    const pos = this.robot.getIRLPos();
-    vscode.postMessage({
-      type: "stroke",
-      ...pos,
-    });
+    throw new Error("function not implemented");
+    // // console.log("update robot pos");
+    // const pos = this.robot.getIRLPos();
+    // // vscode.postMessage({
+    // //   type: "stroke",
+    // //   ...pos,
+    // // });
+    // vscode.postMessage(new Message.ToExtension.Edit())
   }
 
   _initElements(/** @type {HTMLElement} */ parent: HTMLElement) {
@@ -563,76 +567,77 @@ class PawDrawEditor {
   // }
 
   // /** @return {Promise<Uint8Array>} */
-  async getImageData() {
-    // const outCanvas = document.createElement("canvas");
-    // outCanvas.width = this.drawingCanvas.width;
-    // outCanvas.height = this.drawingCanvas.height;
+  async getDocData(): Promise<Uint8Array> {
 
-    // const outCtx = outCanvas.getContext("2d");
-    // outCtx.drawImage(this.initialCanvas, 0, 0);
-    // outCtx.drawImage(this.drawingCanvas, 0, 0);
-
-    // const blob = await new Promise((resolve) => {
-    //   outCanvas.toBlob(resolve, "image/png");
-    // });
-
-    return Array.from(JSON.stringify(this.robot.getIRLPos())).map((e) => e.charCodeAt(0));
+    return new Uint8Array(Array.from(JSON.stringify(this.robot.getIRLPos())).map((e) => e.charCodeAt(0)));
   }
 }
+
+
 
 // @ts-ignore
 export const editor = new PawDrawEditor(document.querySelector(".drawing-canvas"));
 
 // Handle messages from the extension
-window.addEventListener("message", async (e) => {
-  const { type, body, requestId } = e.data;
-
-  switch (type) {
-    case "update": {
-      // const strokes = body.edits.map(
-      //   (edit) => new Stroke(edit.color, edit.stroke)
-      // );
-      // await editor.reset(body.content, strokes);
-
-      console.log(body);
-
-      // editor.reset(body.edits[body.edits.length]);
-
-      /* if (body.edits.length)  */ editor.reset(body.edits[body.edits.length - 1]);
-      return;
-      // body.value = body.content;
-    }
-    case "init": {
-      editor.setEditable(body.editable);
-      console.log(body);
-      let str = String.fromCharCode.apply(null, body.value);
-      console.log(str);
-      editor.reset(JSON.parse(str));
-      editor.updateRobotPosition();
-      // if (body.untitled) {
-      //   await editor.resetUntitled();
-      //   return;
-      // } else {
-      //   // Load the initial image into the canvas.\
-
-      return;
-      // }
-    }
-
-    case "getFileData": {
-      // Get the image data for the canvas and post it back to the extension.
-      editor.getImageData().then((data) => {
-        vscode.postMessage({
-          type: "response",
-          requestId,
-          body: Array.from(data),
-        });
-      });
-      return;
-    }
+window.addEventListener("message", async ({ data: msg }: { data: Message }) => {
+  // const { type, body, requestId } = msg;
+  if (!(msg instanceof Message.ToWebview)) return;
+  if (msg instanceof Message.ToWebview.GetFileRequest)
+    editor.getDocData().then((data) =>
+      vscode.postMessage(Message.ToExtension.GetFileResponse.fromRequest(msg, data)));
+  else if (msg instanceof Message.ToWebview.Initialize) {
+    // init
   }
+  else if (msg instanceof Message.ToWebview.Update) {
+    // update
+  }
+  return;
+  // switch (type) {
+  //   case "update": {
+  //     // const strokes = body.edits.map(
+  //     //   (edit) => new Stroke(edit.color, edit.stroke)
+  //     // );
+  //     // await editor.reset(body.content, strokes);
+
+  //     console.log(body);
+
+  //     // editor.reset(body.edits[body.edits.length]);
+
+  //     /* if (body.edits.length)  */ editor.reset(body.edits[body.edits.length - 1]);
+  //     return;
+  //     // body.value = body.content;
+  //   }
+  //   case "init": {
+  //     editor.setEditable(body.editable);
+  //     console.log(body);
+  //     let str = String.fromCharCode.apply(null, body.value);
+  //     console.log(str);
+  //     editor.reset(JSON.parse(str));
+  //     editor.updateRobotPosition();
+  //     // if (body.untitled) {
+  //     //   await editor.resetUntitled();
+  //     //   return;
+  //     // } else {
+  //     //   // Load the initial image into the canvas.\
+
+  //     return;
+  //     // }
+  //   }
+
+  //   case "getFileData": {
+  //     // Get the image data for the canvas and post it back to the extension.
+  //     editor.getImageData().then((data) => {
+  //       vscode.postMessage({
+  //         type: "response",
+  //         requestId,
+  //         body: Array.from(data),
+  //       });
+  //     });
+  //     return;
+  //   }
+  // }
 });
 
 // Signal to VS Code that the webview is initialized.
-vscode.postMessage({ type: "ready" });
+vscode.postMessage(new Message.ToExtension.Ready());
 // })();

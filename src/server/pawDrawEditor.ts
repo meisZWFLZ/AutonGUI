@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { Disposable, disposeAll } from './dispose';
 import { getNonce } from './util';
+import Message from "../common/message"
+import { ListAction } from '../common/eventList';
+import { Node } from '../common/node';
 
 /**
  * Define the type of edits used in paw draw files.
@@ -10,11 +13,12 @@ import { getNonce } from './util';
 // 	readonly stroke: ReadonlyArray<[number, number]>;
 // }
 
-interface AutonP2PEdit {
-	readonly x: number;
-	readonly y: number;
-	readonly heading: number;
-}
+// interface AutonP2PEdit {
+// 	readonly x: number;
+// 	readonly y: number;
+// 	readonly heading: number;
+// }
+type Edit = ListAction<Node>;
 
 interface PawDrawDocumentDelegate {
 	getFileData(): Promise<Uint8Array>;
@@ -46,8 +50,8 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
 	private readonly _uri: vscode.Uri;
 
 	private _documentData: Uint8Array;
-	private _edits: Array<AutonP2PEdit> = [];
-	private _savedEdits: Array<AutonP2PEdit> = [];
+	private _edits: Array<Edit> = [];
+	private _savedEdits: Array<Edit> = [];
 
 	private readonly _delegate: PawDrawDocumentDelegate;
 
@@ -74,7 +78,7 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
 
 	private readonly _onDidChangeDocument = this._register(new vscode.EventEmitter<{
 		readonly content?: Uint8Array;
-		readonly edits: readonly AutonP2PEdit[];
+		readonly edits: readonly Edit[];
 	}>());
 	/**
 	 * Fired to notify webviews that the document has changed.
@@ -108,7 +112,7 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
 	 *
 	 * This fires an event to notify VS Code that the document has been edited.
 	 */
-	makeEdit(edit: AutonP2PEdit) {
+	makeEdit(edit: Edit) {
 		this._edits.push(edit);
 		this._onDidChange.fire({
 			label: 'Stroke',
@@ -252,9 +256,7 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 				if (!webviewsForDocument.length) {
 					throw new Error('Could not find webview to save for');
 				}
-				const panel = webviewsForDocument[0];
-				const response = await this.postMessageWithResponse<number[]>(panel, 'getFileData', {});
-				return new Uint8Array(response);
+				return new Uint8Array(await this.postMessageWithResponse<number[]>(webviewsForDocument[0], /* 'getFileData', {} */ new Message.ToWebview.GetFileRequest()));
 			}
 		});
 
@@ -271,10 +273,11 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 		listeners.push(document.onDidChangeContent(e => {
 			// Update all webviews when the document changes
 			for (const webviewPanel of this.webviews.get(document.uri)) {
-				this.postMessage(webviewPanel, 'update', {
-					edits: e.edits,
-					content: e.content,
-				});
+				// this.postMessage(webviewPanel, 'update', {
+				// 	edits: e.edits,
+				// 	content: e.content,
+				// });
+				this.postMessage(webviewPanel, new Message.ToWebview.Update(e.edits, e.content))
 			}
 		}));
 
@@ -300,30 +303,37 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 		webviewPanel.webview.onDidReceiveMessage(e => this.onMessage(document, e));
 
 		// Wait for the webview to be properly ready before we init
-		webviewPanel.webview.onDidReceiveMessage(async e => {
+		webviewPanel.webview.onDidReceiveMessage(async (e: Message) => {
+			if (!(e instanceof Message.ToExtension)) return;
+			if (e instanceof Message.ToExtension.Ready)
+				if (document.uri.scheme === 'untitled')
+					this.postMessage(webviewPanel, new Message.ToWebview.Initialize.Untitled())
+				else this.postMessage(webviewPanel,
+					new Message.ToWebview.Initialize.Existing({ docData: document.documentData, editable: vscode.workspace.fs.isWritableFileSystem(document.uri.scheme) }))
+			return;
 			// const fieldUri = vscode.Uri.joinPath(
 			// 	this._context.extensionUri,
 			// 	"media",
 			// 	"SpinUpField.png"
 			// );
 			// const fieldData = new Uint8Array(await vscode.workspace.fs.readFile(fieldUri));
-			if (e.type === 'ready') {
-				if (document.uri.scheme === 'untitled') {
-					this.postMessage(webviewPanel, 'init', {
-						untitled: true,
-						// data: fieldData,
-						editable: true,
-					});
-				} else {
-					const editable = vscode.workspace.fs.isWritableFileSystem(document.uri.scheme);
+			// if (e.type === 'ready') {
+			// 	if (document.uri.scheme === 'untitled') {
+			// 		this.postMessage(webviewPanel, 'init', {
+			// 			untitled: true,
+			// 			// data: fieldData,
+			// 			editable: true,
+			// 		});
+			// 	} else {
+			// 		const editable = vscode.workspace.fs.isWritableFileSystem(document.uri.scheme);
 
-					this.postMessage(webviewPanel, 'init', {
-						value: document.documentData,
-						// data: fieldData,
-						editable,
-					});
-				}
-			}
+			// 		this.postMessage(webviewPanel, 'init', {
+			// 			value: document.documentData,
+			// 			// data: fieldData,
+			// 			editable,
+			// 		});
+			// 	}
+			// }
 		});
 	}
 
@@ -396,7 +406,7 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 ${""
 			// <img class="robot"
 			//  src="${robotPngUri}"
-			//  alt="robor">
+			//  alt="robot">
 			}
 	${""
 			//<div class="drawing-canvas"></div>
@@ -416,31 +426,42 @@ ${""
 	private _requestId = 1;
 	private readonly _callbacks = new Map<number, (response: any) => void>();
 
-	private postMessageWithResponse<R = unknown>(panel: vscode.WebviewPanel, type: string, body: any): Promise<R> {
-		const requestId = this._requestId++;
-		const p = new Promise<R>(resolve => this._callbacks.set(requestId, resolve));
-		panel.webview.postMessage({ type, requestId, body });
+	private postMessageWithResponse<R = unknown>(panel: vscode.WebviewPanel, msg: typeof Message.ToWebview.prototype): Promise<R> {
+		// const requestId = this._requestId++;
+		const p = new Promise<R>(resolve => this._callbacks.set(msg.id, resolve));
+		// panel.webview.postMessage({ type, requestId, body });
+		panel.webview.postMessage(msg);
 		return p;
 	}
 
-	private postMessage(panel: vscode.WebviewPanel, type: string, body: any): void {
-		panel.webview.postMessage({ type, body });
+	private postMessage(panel: vscode.WebviewPanel, msg: typeof Message.ToWebview.prototype/* type: string, body: any */): void {
+		panel.webview.postMessage(/* { type, body } */ msg);
 	}
 
-	private onMessage(document: PawDrawDocument, message: any) {
-		switch (message.type) {
-			case 'stroke':
-				document.makeEdit(message as AutonP2PEdit);
-				return;
-
-			case 'response':
-				{
-					console.log(message);
-					const callback = this._callbacks.get(message.requestId);
-					callback?.(message.body);
-					return;
-				}
+	private onMessage(document: PawDrawDocument, msg: Message) {
+		if (!(msg instanceof Message.ToExtension)) return;
+		if (msg instanceof Message.ToExtension.Edit)
+			document.makeEdit(msg.edit);
+		else if (msg instanceof Message.ToExtension.GetFileResponse) {
+			console.log(msg);
+			this._callbacks.get(msg.id)?.(msg);
+			// callback?.(msg);
 		}
+		return;
+
+		// switch (message.type) {
+		// 	case 'stroke':
+		// 		document.makeEdit(message as AutonP2PEdit);
+		// 		return;
+
+		// 	case 'response':
+		// 		{
+		// 			console.log(message);
+		// 			const callback = this._callbacks.get(message.requestId);
+		// 			callback?.(message.body);
+		// 			return;
+		// 		}
+		// }
 	}
 }
 

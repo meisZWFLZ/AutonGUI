@@ -1,4 +1,4 @@
-import { AbsoluteCoord, AbsolutePos, PhysicalCoord, PhysicalPos, RelativeCoord } from "./coordinates.js";
+import { AbsoluteCoord, AbsolutePos, PhysicalCoord, PhysicalPos, RelativeCoord } from "../common/coordinates";
 // console.log(Coordinates)
 // let { AbsoluteCoord, PhysicalCoord, PhysicalPos } = Coordinates;
 /* 
