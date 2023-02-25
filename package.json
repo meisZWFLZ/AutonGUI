@@ -17,7 +17,7 @@
     "Other"
   ],
   "activationEvents": [],
-  "main": "./out/server/extension.js",
+  "main": "./out/server/server/extension.js",
   "contributes": {
     "customEditors": [
       {

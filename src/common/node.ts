@@ -1,5 +1,4 @@
-import { Serializable, SerializationType } from "child_process";
-import { Coordinate, Position, Rotatable } from "./coordinates";
+import { Coordinate, Position, Rotatable } from "./coordinates.js";
 
 export enum ACTION_TYPE {
 	SHOOT,
@@ -26,4 +25,5 @@ export abstract class Action {
 		type = ACTION_TYPE.EXPAND;
 	}
 }
+/** @param actions must not be empty */
 export type Node = { position: Position | Coordinate | Rotatable, actions?: Action[] };

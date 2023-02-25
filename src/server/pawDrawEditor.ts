@@ -1,9 +1,9 @@
-import * as vscode from 'vscode';
-import { Disposable, disposeAll } from './dispose';
-import { getNonce } from './util';
-import Message from "../common/message"
-import { ListAction } from '../common/eventList';
-import { Node } from '../common/node';
+import * as vscode from "vscode";
+import { Disposable, disposeAll } from "./dispose";
+import { getNonce } from "./util";
+import Message from "../common/message";
+import { ListAction } from "../common/eventList";
+import { Node } from "../common/node";
 
 /**
  * Define the type of edits used in paw draw files.
@@ -21,167 +21,183 @@ import { Node } from '../common/node';
 type Edit = ListAction<Node>;
 
 interface PawDrawDocumentDelegate {
-	getFileData(): Promise<Uint8Array>;
+  getFileData(): Promise<Uint8Array>;
 }
 
 /**
  * Define the document (the data model) used for paw draw files.
  */
 class PawDrawDocument extends Disposable implements vscode.CustomDocument {
+  static async create(
+    uri: vscode.Uri,
+    backupId: string | undefined,
+    delegate: PawDrawDocumentDelegate
+  ): Promise<PawDrawDocument | PromiseLike<PawDrawDocument>> {
+    // If we have a backup, read that. Otherwise read the resource from the workspace
+    const dataFile =
+      typeof backupId === "string" ? vscode.Uri.parse(backupId) : uri;
+    const fileData = await PawDrawDocument.readFile(dataFile);
+    return new PawDrawDocument(uri, fileData, delegate);
+  }
 
-	static async create(
-		uri: vscode.Uri,
-		backupId: string | undefined,
-		delegate: PawDrawDocumentDelegate,
-	): Promise<PawDrawDocument | PromiseLike<PawDrawDocument>> {
-		// If we have a backup, read that. Otherwise read the resource from the workspace
-		const dataFile = typeof backupId === 'string' ? vscode.Uri.parse(backupId) : uri;
-		const fileData = await PawDrawDocument.readFile(dataFile);
-		return new PawDrawDocument(uri, fileData, delegate);
-	}
+  private static async readFile(uri: vscode.Uri): Promise<Uint8Array> {
+    if (uri.scheme === "untitled") {
+      return new Uint8Array();
+    }
+    return new Uint8Array(await vscode.workspace.fs.readFile(uri));
+  }
 
-	private static async readFile(uri: vscode.Uri): Promise<Uint8Array> {
-		if (uri.scheme === 'untitled') {
-			return new Uint8Array();
-		}
-		return new Uint8Array(await vscode.workspace.fs.readFile(uri));
-	}
+  private readonly _uri: vscode.Uri;
 
-	private readonly _uri: vscode.Uri;
+  private _documentData: Uint8Array;
+  private _edits: Array<Edit> = [];
+  private _savedEdits: Array<Edit> = [];
 
-	private _documentData: Uint8Array;
-	private _edits: Array<Edit> = [];
-	private _savedEdits: Array<Edit> = [];
+  private readonly _delegate: PawDrawDocumentDelegate;
 
-	private readonly _delegate: PawDrawDocumentDelegate;
+  private constructor(
+    uri: vscode.Uri,
+    initialContent: Uint8Array,
+    delegate: PawDrawDocumentDelegate
+  ) {
+    super();
+    this._uri = uri;
+    this._documentData = initialContent;
+    this._delegate = delegate;
+  }
 
-	private constructor(
-		uri: vscode.Uri,
-		initialContent: Uint8Array,
-		delegate: PawDrawDocumentDelegate
-	) {
-		super();
-		this._uri = uri;
-		this._documentData = initialContent;
-		this._delegate = delegate;
-	}
+  public get uri() {
+    return this._uri;
+  }
 
-	public get uri() { return this._uri; }
+  public get documentData(): Uint8Array {
+    return this._documentData;
+  }
 
-	public get documentData(): Uint8Array { return this._documentData; }
+  private readonly _onDidDispose = this._register(
+    new vscode.EventEmitter<void>()
+  );
+  /**
+   * Fired when the document is disposed of.
+   */
+  public readonly onDidDispose = this._onDidDispose.event;
 
-	private readonly _onDidDispose = this._register(new vscode.EventEmitter<void>());
-	/**
-	 * Fired when the document is disposed of.
-	 */
-	public readonly onDidDispose = this._onDidDispose.event;
+  private readonly _onDidChangeDocument = this._register(
+    new vscode.EventEmitter<{
+      readonly content?: Uint8Array;
+      readonly edits: Edit[];
+    }>()
+  );
+  /**
+   * Fired to notify webviews that the document has changed.
+   */
+  public readonly onDidChangeContent = this._onDidChangeDocument.event;
 
-	private readonly _onDidChangeDocument = this._register(new vscode.EventEmitter<{
-		readonly content?: Uint8Array;
-		readonly edits: readonly Edit[];
-	}>());
-	/**
-	 * Fired to notify webviews that the document has changed.
-	 */
-	public readonly onDidChangeContent = this._onDidChangeDocument.event;
+  private readonly _onDidChange = this._register(
+    new vscode.EventEmitter<{
+      readonly label: string;
+      undo(): void;
+      redo(): void;
+    }>()
+  );
+  /**
+   * Fired to tell VS Code that an edit has occurred in the document.
+   *
+   * This updates the document's dirty indicator.
+   */
+  public readonly onDidChange = this._onDidChange.event;
 
-	private readonly _onDidChange = this._register(new vscode.EventEmitter<{
-		readonly label: string,
-		undo(): void,
-		redo(): void,
-	}>());
-	/**
-	 * Fired to tell VS Code that an edit has occurred in the document.
-	 *
-	 * This updates the document's dirty indicator.
-	 */
-	public readonly onDidChange = this._onDidChange.event;
+  /**
+   * Called by VS Code when there are no more references to the document.
+   *
+   * This happens when all editors for it have been closed.
+   */
+  dispose(): void {
+    this._onDidDispose.fire();
+    super.dispose();
+  }
 
-	/**
-	 * Called by VS Code when there are no more references to the document.
-	 *
-	 * This happens when all editors for it have been closed.
-	 */
-	dispose(): void {
-		this._onDidDispose.fire();
-		super.dispose();
-	}
+  /**
+   * Called when the user edits the document in a webview.
+   *
+   * This fires an event to notify VS Code that the document has been edited.
+   */
+  makeEdit(edit: Edit) {
+    this._edits.push(edit);
+    this._onDidChange.fire({
+      label: "Stroke",
+      undo: async () => {
+        this._edits.pop();
+        this._onDidChangeDocument.fire({
+          edits: this._edits,
+        });
+      },
+      redo: async () => {
+        this._edits.push(edit);
+        this._onDidChangeDocument.fire({
+          edits: this._edits,
+        });
+      },
+    });
+  }
 
-	/**
-	 * Called when the user edits the document in a webview.
-	 *
-	 * This fires an event to notify VS Code that the document has been edited.
-	 */
-	makeEdit(edit: Edit) {
-		this._edits.push(edit);
-		this._onDidChange.fire({
-			label: 'Stroke',
-			undo: async () => {
-				this._edits.pop();
-				this._onDidChangeDocument.fire({
-					edits: this._edits,
-				});
-			},
-			redo: async () => {
-				this._edits.push(edit);
-				this._onDidChangeDocument.fire({
-					edits: this._edits,
-				});
-			}
-		});
-	}
+  /**
+   * Called by VS Code when the user saves the document.
+   */
+  async save(cancellation: vscode.CancellationToken): Promise<void> {
+    await this.saveAs(this.uri, cancellation);
+    this._savedEdits = Array.from(this._edits);
+  }
 
-	/**
-	 * Called by VS Code when the user saves the document.
-	 */
-	async save(cancellation: vscode.CancellationToken): Promise<void> {
-		await this.saveAs(this.uri, cancellation);
-		this._savedEdits = Array.from(this._edits);
-	}
+  /**
+   * Called by VS Code when the user saves the document to a new location.
+   */
+  async saveAs(
+    targetResource: vscode.Uri,
+    cancellation: vscode.CancellationToken
+  ): Promise<void> {
+    const fileData = await this._delegate.getFileData();
+    if (cancellation.isCancellationRequested) {
+      return;
+    }
+    await vscode.workspace.fs.writeFile(targetResource, fileData);
+  }
 
-	/**
-	 * Called by VS Code when the user saves the document to a new location.
-	 */
-	async saveAs(targetResource: vscode.Uri, cancellation: vscode.CancellationToken): Promise<void> {
-		const fileData = await this._delegate.getFileData();
-		if (cancellation.isCancellationRequested) {
-			return;
-		}
-		await vscode.workspace.fs.writeFile(targetResource, fileData);
-	}
+  /**
+   * Called by VS Code when the user calls `revert` on a document.
+   */
+  async revert(_cancellation: vscode.CancellationToken): Promise<void> {
+    const diskContent = await PawDrawDocument.readFile(this.uri);
+    this._documentData = diskContent;
+    this._edits = this._savedEdits;
+    this._onDidChangeDocument.fire({
+      content: diskContent,
+      edits: this._edits,
+    });
+  }
 
-	/**
-	 * Called by VS Code when the user calls `revert` on a document.
-	 */
-	async revert(_cancellation: vscode.CancellationToken): Promise<void> {
-		const diskContent = await PawDrawDocument.readFile(this.uri);
-		this._documentData = diskContent;
-		this._edits = this._savedEdits;
-		this._onDidChangeDocument.fire({
-			content: diskContent,
-			edits: this._edits,
-		});
-	}
+  /**
+   * Called by VS Code to backup the edited document.
+   *
+   * These backups are used to implement hot exit.
+   */
+  async backup(
+    destination: vscode.Uri,
+    cancellation: vscode.CancellationToken
+  ): Promise<vscode.CustomDocumentBackup> {
+    await this.saveAs(destination, cancellation);
 
-	/**
-	 * Called by VS Code to backup the edited document.
-	 *
-	 * These backups are used to implement hot exit.
-	 */
-	async backup(destination: vscode.Uri, cancellation: vscode.CancellationToken): Promise<vscode.CustomDocumentBackup> {
-		await this.saveAs(destination, cancellation);
-
-		return {
-			id: destination.toString(),
-			delete: async () => {
-				try {
-					await vscode.workspace.fs.delete(destination);
-				} catch {
-					// noop
-				}
-			}
-		};
-	}
+    return {
+      id: destination.toString(),
+      delete: async () => {
+        try {
+          await vscode.workspace.fs.delete(destination);
+        } catch {
+          // noop
+        }
+      },
+    };
+  }
 }
 
 /**
@@ -199,189 +215,254 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
  * - Implementing save, undo, redo, and revert.
  * - Backing up a custom editor.
  */
-export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDrawDocument> {
+export class PawDrawEditorProvider
+  implements vscode.CustomEditorProvider<PawDrawDocument>
+{
+  private static newPawDrawFileId = 1;
 
-	private static newPawDrawFileId = 1;
+  public static register(context: vscode.ExtensionContext): vscode.Disposable {
+    vscode.commands.registerCommand("catCustoms.pawDraw.new", () => {
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      if (!workspaceFolders) {
+        vscode.window.showErrorMessage(
+          "Creating new Paw Draw files currently requires opening a workspace"
+        );
+        return;
+      }
 
-	public static register(context: vscode.ExtensionContext): vscode.Disposable {
-		vscode.commands.registerCommand('catCustoms.pawDraw.new', () => {
-			const workspaceFolders = vscode.workspace.workspaceFolders;
-			if (!workspaceFolders) {
-				vscode.window.showErrorMessage("Creating new Paw Draw files currently requires opening a workspace");
-				return;
-			}
+      const uri = vscode.Uri.joinPath(
+        workspaceFolders[0].uri,
+        `new-${PawDrawEditorProvider.newPawDrawFileId++}.pawdraw`
+      ).with({ scheme: "untitled" });
 
-			const uri = vscode.Uri.joinPath(workspaceFolders[0].uri, `new-${PawDrawEditorProvider.newPawDrawFileId++}.pawdraw`)
-				.with({ scheme: 'untitled' });
+      vscode.commands.executeCommand(
+        "vscode.openWith",
+        uri,
+        PawDrawEditorProvider.viewType
+      );
+    });
 
-			vscode.commands.executeCommand('vscode.openWith', uri, PawDrawEditorProvider.viewType);
-		});
+    return vscode.window.registerCustomEditorProvider(
+      PawDrawEditorProvider.viewType,
+      new PawDrawEditorProvider(context),
+      {
+        // For this demo extension, we enable `retainContextWhenHidden` which keeps the
+        // webview alive even when it is not visible. You should avoid using this setting
+        // unless is absolutely required as it does have memory overhead.
+        // webviewOptions: {
+        // 	retainContextWhenHidden: true,
+        // },
+        supportsMultipleEditorsPerDocument: false,
+      }
+    );
+  }
 
-		return vscode.window.registerCustomEditorProvider(
-			PawDrawEditorProvider.viewType,
-			new PawDrawEditorProvider(context),
-			{
-				// For this demo extension, we enable `retainContextWhenHidden` which keeps the
-				// webview alive even when it is not visible. You should avoid using this setting
-				// unless is absolutely required as it does have memory overhead.
-				// webviewOptions: {
-				// 	retainContextWhenHidden: true,
-				// },
-				supportsMultipleEditorsPerDocument: false,
-			});
-	}
+  private static readonly viewType = "catCustoms.pawDraw";
 
-	private static readonly viewType = 'catCustoms.pawDraw';
+  /**
+   * Tracks all known webviews
+   */
+  private readonly webviews = new WebviewCollection();
 
-	/**
-	 * Tracks all known webviews
-	 */
-	private readonly webviews = new WebviewCollection();
+  constructor(private readonly _context: vscode.ExtensionContext) {}
 
-	constructor(
-		private readonly _context: vscode.ExtensionContext
-	) { }
+  //#region CustomEditorProvider
 
-	//#region CustomEditorProvider
+  async openCustomDocument(
+    uri: vscode.Uri,
+    openContext: { backupId?: string },
+    _token: vscode.CancellationToken
+  ): Promise<PawDrawDocument> {
+    const document: PawDrawDocument = await PawDrawDocument.create(
+      uri,
+      openContext.backupId,
+      {
+        getFileData: async () => {
+          const webviewsForDocument = Array.from(
+            this.webviews.get(document.uri)
+          );
+          if (!webviewsForDocument.length) {
+            throw new Error("Could not find webview to save for");
+          }
+          return new Uint8Array(
+            await this.postMessageWithResponse<number[]>(
+              webviewsForDocument[0],
+              /* 'getFileData', {} */ new Message.ToWebview.GetFileRequest()
+            )
+          );
+        },
+      }
+    );
 
-	async openCustomDocument(
-		uri: vscode.Uri,
-		openContext: { backupId?: string },
-		_token: vscode.CancellationToken
-	): Promise<PawDrawDocument> {
+    const listeners: vscode.Disposable[] = [];
 
-		const document: PawDrawDocument = await PawDrawDocument.create(uri, openContext.backupId, {
-			getFileData: async () => {
-				const webviewsForDocument = Array.from(this.webviews.get(document.uri));
-				if (!webviewsForDocument.length) {
-					throw new Error('Could not find webview to save for');
-				}
-				return new Uint8Array(await this.postMessageWithResponse<number[]>(webviewsForDocument[0], /* 'getFileData', {} */ new Message.ToWebview.GetFileRequest()));
-			}
-		});
+    listeners.push(
+      document.onDidChange((e) => {
+        // Tell VS Code that the document has been edited by the use.
+        this._onDidChangeCustomDocument.fire({
+          document,
+          ...e,
+        });
+      })
+    );
 
-		const listeners: vscode.Disposable[] = [];
+    listeners.push(
+      document.onDidChangeContent((e) => {
+        // Update all webviews when the document changes
+        for (const webviewPanel of this.webviews.get(document.uri)) {
+          // this.postMessage(webviewPanel, 'update', {
+          // 	edits: e.edits,
+          // 	content: e.content,
+          // });
+          this.postMessage(
+            webviewPanel,
+            new Message.ToWebview.Update(e.edits, e.content)
+          );
+        }
+      })
+    );
 
-		listeners.push(document.onDidChange(e => {
-			// Tell VS Code that the document has been edited by the use.
-			this._onDidChangeCustomDocument.fire({
-				document,
-				...e,
-			});
-		}));
+    document.onDidDispose(() => disposeAll(listeners));
 
-		listeners.push(document.onDidChangeContent(e => {
-			// Update all webviews when the document changes
-			for (const webviewPanel of this.webviews.get(document.uri)) {
-				// this.postMessage(webviewPanel, 'update', {
-				// 	edits: e.edits,
-				// 	content: e.content,
-				// });
-				this.postMessage(webviewPanel, new Message.ToWebview.Update(e.edits, e.content))
-			}
-		}));
+    return document;
+  }
 
-		document.onDidDispose(() => disposeAll(listeners));
+  async resolveCustomEditor(
+    document: PawDrawDocument,
+    webviewPanel: vscode.WebviewPanel,
+    _token: vscode.CancellationToken
+  ): Promise<void> {
+    // Add the webview to our internal set of active webviews
+    this.webviews.add(document.uri, webviewPanel);
 
-		return document;
-	}
+    // Setup initial content for the webview
+    webviewPanel.webview.options = {
+      enableScripts: true,
+    };
+    webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
 
-	async resolveCustomEditor(
-		document: PawDrawDocument,
-		webviewPanel: vscode.WebviewPanel,
-		_token: vscode.CancellationToken
-	): Promise<void> {
-		// Add the webview to our internal set of active webviews
-		this.webviews.add(document.uri, webviewPanel);
+    webviewPanel.webview.onDidReceiveMessage((e) =>
+      this.onMessage(document, e)
+    );
 
-		// Setup initial content for the webview
-		webviewPanel.webview.options = {
-			enableScripts: true,
-		};
-		webviewPanel.webview.html = this.getHtmlForWebview(webviewPanel.webview);
+    // Wait for the webview to be properly ready before we init
+    webviewPanel.webview.onDidReceiveMessage(async (e: Message) => {
+      if (!(e instanceof Message.ToExtension)) return;
+      if (e instanceof Message.ToExtension.Ready)
+        if (document.uri.scheme === "untitled")
+          this.postMessage(
+            webviewPanel,
+            new Message.ToWebview.Initialize.Untitled()
+          );
+        else
+          this.postMessage(
+            webviewPanel,
+            new Message.ToWebview.Initialize.Existing({
+              docData: document.documentData,
+              editable: vscode.workspace.fs.isWritableFileSystem(
+                document.uri.scheme
+              ),
+            })
+          );
+      return;
+      // const fieldUri = vscode.Uri.joinPath(
+      // 	this._context.extensionUri,
+      // 	"media",
+      // 	"SpinUpField.png"
+      // );
+      // const fieldData = new Uint8Array(await vscode.workspace.fs.readFile(fieldUri));
+      // if (e.type === 'ready') {
+      // 	if (document.uri.scheme === 'untitled') {
+      // 		this.postMessage(webviewPanel, 'init', {
+      // 			untitled: true,
+      // 			// data: fieldData,
+      // 			editable: true,
+      // 		});
+      // 	} else {
+      // 		const editable = vscode.workspace.fs.isWritableFileSystem(document.uri.scheme);
 
-		webviewPanel.webview.onDidReceiveMessage(e => this.onMessage(document, e));
+      // 		this.postMessage(webviewPanel, 'init', {
+      // 			value: document.documentData,
+      // 			// data: fieldData,
+      // 			editable,
+      // 		});
+      // 	}
+      // }
+    });
+  }
 
-		// Wait for the webview to be properly ready before we init
-		webviewPanel.webview.onDidReceiveMessage(async (e: Message) => {
-			if (!(e instanceof Message.ToExtension)) return;
-			if (e instanceof Message.ToExtension.Ready)
-				if (document.uri.scheme === 'untitled')
-					this.postMessage(webviewPanel, new Message.ToWebview.Initialize.Untitled())
-				else this.postMessage(webviewPanel,
-					new Message.ToWebview.Initialize.Existing({ docData: document.documentData, editable: vscode.workspace.fs.isWritableFileSystem(document.uri.scheme) }))
-			return;
-			// const fieldUri = vscode.Uri.joinPath(
-			// 	this._context.extensionUri,
-			// 	"media",
-			// 	"SpinUpField.png"
-			// );
-			// const fieldData = new Uint8Array(await vscode.workspace.fs.readFile(fieldUri));
-			// if (e.type === 'ready') {
-			// 	if (document.uri.scheme === 'untitled') {
-			// 		this.postMessage(webviewPanel, 'init', {
-			// 			untitled: true,
-			// 			// data: fieldData,
-			// 			editable: true,
-			// 		});
-			// 	} else {
-			// 		const editable = vscode.workspace.fs.isWritableFileSystem(document.uri.scheme);
+  private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<
+    vscode.CustomDocumentEditEvent<PawDrawDocument>
+  >();
+  public readonly onDidChangeCustomDocument =
+    this._onDidChangeCustomDocument.event;
 
-			// 		this.postMessage(webviewPanel, 'init', {
-			// 			value: document.documentData,
-			// 			// data: fieldData,
-			// 			editable,
-			// 		});
-			// 	}
-			// }
-		});
-	}
+  public saveCustomDocument(
+    document: PawDrawDocument,
+    cancellation: vscode.CancellationToken
+  ): Thenable<void> {
+    return document.save(cancellation);
+  }
 
-	private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<vscode.CustomDocumentEditEvent<PawDrawDocument>>();
-	public readonly onDidChangeCustomDocument = this._onDidChangeCustomDocument.event;
+  public saveCustomDocumentAs(
+    document: PawDrawDocument,
+    destination: vscode.Uri,
+    cancellation: vscode.CancellationToken
+  ): Thenable<void> {
+    return document.saveAs(destination, cancellation);
+  }
 
-	public saveCustomDocument(document: PawDrawDocument, cancellation: vscode.CancellationToken): Thenable<void> {
-		return document.save(cancellation);
-	}
+  public revertCustomDocument(
+    document: PawDrawDocument,
+    cancellation: vscode.CancellationToken
+  ): Thenable<void> {
+    return document.revert(cancellation);
+  }
 
-	public saveCustomDocumentAs(document: PawDrawDocument, destination: vscode.Uri, cancellation: vscode.CancellationToken): Thenable<void> {
-		return document.saveAs(destination, cancellation);
-	}
+  public backupCustomDocument(
+    document: PawDrawDocument,
+    context: vscode.CustomDocumentBackupContext,
+    cancellation: vscode.CancellationToken
+  ): Thenable<vscode.CustomDocumentBackup> {
+    return document.backup(context.destination, cancellation);
+  }
 
-	public revertCustomDocument(document: PawDrawDocument, cancellation: vscode.CancellationToken): Thenable<void> {
-		return document.revert(cancellation);
-	}
+  //#endregion
 
-	public backupCustomDocument(document: PawDrawDocument, context: vscode.CustomDocumentBackupContext, cancellation: vscode.CancellationToken): Thenable<vscode.CustomDocumentBackup> {
-		return document.backup(context.destination, cancellation);
-	}
+  /**
+   * Get the static HTML used for in our editor's webviews.
+   */
+  private getHtmlForWebview(webview: vscode.Webview): string {
+    // Local path to script and css for the webview
+    const scriptUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this._context.extensionUri,
+        "out",
+        "webview",
+        "webview",
+        "pawDraw.js"
+      )
+    );
 
-	//#endregion
+    const styleResetUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._context.extensionUri, "media", "reset.css")
+    );
 
-	/**
-	 * Get the static HTML used for in our editor's webviews.
-	 */
-	private getHtmlForWebview(webview: vscode.Webview): string {
-		// Local path to script and css for the webview
-		const scriptUri = webview.asWebviewUri(vscode.Uri.joinPath(
-			this._context.extensionUri, "out", 'webview', 'pawDraw.js'));
+    const styleVSCodeUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._context.extensionUri, "media", "vscode.css")
+    );
 
-		const styleResetUri = webview.asWebviewUri(vscode.Uri.joinPath(
-			this._context.extensionUri, 'media', 'reset.css'));
+    const styleMainUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._context.extensionUri, "media", "pawDraw.css")
+    );
 
-		const styleVSCodeUri = webview.asWebviewUri(vscode.Uri.joinPath(
-			this._context.extensionUri, 'media', 'vscode.css'));
+    // const robotPngUri = webview.asWebviewUri(vscode.Uri.joinPath(
+    // 	this._context.extensionUri, 'media', 'robot.png'));
 
-		const styleMainUri = webview.asWebviewUri(vscode.Uri.joinPath(
-			this._context.extensionUri, 'media', 'pawDraw.css'));
+    // Use a nonce to whitelist which scripts can be run
+    const nonce = getNonce();
 
-		// const robotPngUri = webview.asWebviewUri(vscode.Uri.joinPath(
-		// 	this._context.extensionUri, 'media', 'robot.png'));
-
-		// Use a nonce to whitelist which scripts can be run
-		const nonce = getNonce();
-
-		return /* html */`
+    return /* html */ `
 			<!DOCTYPE html>
 			<html lang="en">
 			<head>
@@ -391,7 +472,9 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 				Use a content security policy to only allow loading images from https or from our extension directory,
 				and only allow scripts that have a specific nonce.
 				-->
-				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${webview.cspSource} blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
+				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${
+          webview.cspSource
+        } blob:; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';">
 
 				<meta name="viewport" content="width=device-width, initial-scale=1.0">
 		<link href="${styleResetUri}" rel="stylesheet" />
@@ -403,99 +486,105 @@ export class PawDrawEditorProvider implements vscode.CustomEditorProvider<PawDra
 		<div class="field">
 			<p class="robot"> </p>
 		</div>
-${""
-			// <img class="robot"
-			//  src="${robotPngUri}"
-			//  alt="robot">
-			}
-	${""
-			//<div class="drawing-canvas"></div>
-			// <div class="drawing-controls">
-			// 	<button data-color="black" class="black active" title="Black"></button>
-			// 	<button data-color="white" class="white" title="White"></button>
-			// 	<button data-color="red" class="red" title="Red"></button>
-			// 	<button data-color="green" class="green" title="Green"></button>
-			// 	<button data-color="blue" class="blue" title="Blue"></button>
-			// </div>
-			}
+${
+  ""
+  // <img class="robot"
+  //  src="${robotPngUri}"
+  //  alt="robot">
+}
+	${
+    ""
+    //<div class="drawing-canvas"></div>
+    // <div class="drawing-controls">
+    // 	<button data-color="black" class="black active" title="Black"></button>
+    // 	<button data-color="white" class="white" title="White"></button>
+    // 	<button data-color="red" class="red" title="Red"></button>
+    // 	<button data-color="green" class="green" title="Green"></button>
+    // 	<button data-color="blue" class="blue" title="Blue"></button>
+    // </div>
+  }
 				<script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;
-	}
+  }
 
-	private _requestId = 1;
-	private readonly _callbacks = new Map<number, (response: any) => void>();
+  private _requestId = 1;
+  private readonly _callbacks = new Map<number, (response: any) => void>();
 
-	private postMessageWithResponse<R = unknown>(panel: vscode.WebviewPanel, msg: typeof Message.ToWebview.prototype): Promise<R> {
-		// const requestId = this._requestId++;
-		const p = new Promise<R>(resolve => this._callbacks.set(msg.id, resolve));
-		// panel.webview.postMessage({ type, requestId, body });
-		panel.webview.postMessage(msg);
-		return p;
-	}
+  private postMessageWithResponse<R = unknown>(
+    panel: vscode.WebviewPanel,
+    msg: typeof Message.ToWebview.prototype
+  ): Promise<R> {
+    // const requestId = this._requestId++;
+    const p = new Promise<R>((resolve) => this._callbacks.set(msg.id, resolve));
+    // panel.webview.postMessage({ type, requestId, body });
+    panel.webview.postMessage(msg);
+    return p;
+  }
 
-	private postMessage(panel: vscode.WebviewPanel, msg: typeof Message.ToWebview.prototype/* type: string, body: any */): void {
-		panel.webview.postMessage(/* { type, body } */ msg);
-	}
+  private postMessage(
+    panel: vscode.WebviewPanel,
+    msg: typeof Message.ToWebview.prototype /* type: string, body: any */
+  ): void {
+    panel.webview.postMessage(/* { type, body } */ msg);
+  }
 
-	private onMessage(document: PawDrawDocument, msg: Message) {
-		if (!(msg instanceof Message.ToExtension)) return;
-		if (msg instanceof Message.ToExtension.Edit)
-			document.makeEdit(msg.edit);
-		else if (msg instanceof Message.ToExtension.GetFileResponse) {
-			console.log(msg);
-			this._callbacks.get(msg.id)?.(msg);
-			// callback?.(msg);
-		}
-		return;
+  private onMessage(document: PawDrawDocument, msg: Message) {
+    if (!(msg instanceof Message.ToExtension)) return;
+    if (msg instanceof Message.ToExtension.Edit) document.makeEdit(msg.edit);
+    else if (msg instanceof Message.ToExtension.GetFileResponse) {
+      console.log(msg);
+      this._callbacks.get(msg.id)?.(msg);
+      // callback?.(msg);
+    }
+    return;
 
-		// switch (message.type) {
-		// 	case 'stroke':
-		// 		document.makeEdit(message as AutonP2PEdit);
-		// 		return;
+    // switch (message.type) {
+    // 	case 'stroke':
+    // 		document.makeEdit(message as AutonP2PEdit);
+    // 		return;
 
-		// 	case 'response':
-		// 		{
-		// 			console.log(message);
-		// 			const callback = this._callbacks.get(message.requestId);
-		// 			callback?.(message.body);
-		// 			return;
-		// 		}
-		// }
-	}
+    // 	case 'response':
+    // 		{
+    // 			console.log(message);
+    // 			const callback = this._callbacks.get(message.requestId);
+    // 			callback?.(message.body);
+    // 			return;
+    // 		}
+    // }
+  }
 }
 
 /**
  * Tracks all webviews.
  */
 class WebviewCollection {
+  private readonly _webviews = new Set<{
+    readonly resource: string;
+    readonly webviewPanel: vscode.WebviewPanel;
+  }>();
 
-	private readonly _webviews = new Set<{
-		readonly resource: string;
-		readonly webviewPanel: vscode.WebviewPanel;
-	}>();
+  /**
+   * Get all known webviews for a given uri.
+   */
+  public *get(uri: vscode.Uri): Iterable<vscode.WebviewPanel> {
+    const key = uri.toString();
+    for (const entry of this._webviews) {
+      if (entry.resource === key) {
+        yield entry.webviewPanel;
+      }
+    }
+  }
 
-	/**
-	 * Get all known webviews for a given uri.
-	 */
-	public *get(uri: vscode.Uri): Iterable<vscode.WebviewPanel> {
-		const key = uri.toString();
-		for (const entry of this._webviews) {
-			if (entry.resource === key) {
-				yield entry.webviewPanel;
-			}
-		}
-	}
+  /**
+   * Add a new webview to the collection.
+   */
+  public add(uri: vscode.Uri, webviewPanel: vscode.WebviewPanel) {
+    const entry = { resource: uri.toString(), webviewPanel };
+    this._webviews.add(entry);
 
-	/**
-	 * Add a new webview to the collection.
-	 */
-	public add(uri: vscode.Uri, webviewPanel: vscode.WebviewPanel) {
-		const entry = { resource: uri.toString(), webviewPanel };
-		this._webviews.add(entry);
-
-		webviewPanel.onDidDispose(() => {
-			this._webviews.delete(entry);
-		});
-	}
+    webviewPanel.onDidDispose(() => {
+      this._webviews.delete(entry);
+    });
+  }
 }

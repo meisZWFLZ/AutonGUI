@@ -1,8 +1,17 @@
 // @ts-check
 
-import { AbsoluteCoord, ConvertibleCoordinate, DimensionProvider, PhysicalCoord, PhysicalPos } from "../common/coordinates";
-import { Robot } from "./robot.js";
-import Message from "../common/message"
+import {
+  AbsoluteCoord,
+  ConvertibleCoordinate,
+  DimensionProvider,
+  PhysicalCoord,
+  PhysicalPos,
+} from "../common/coordinates.js";
+import Message from "../common/message.js";
+import NodeList from "../common/nodeList.js";
+import type { Node } from "../common/node.js";
+import ListManager from "./listManager.js";
+import { ListAction } from "../common/eventList.js";
 
 // @ts-ignore
 const vscode = acquireVsCodeApi();
@@ -32,8 +41,9 @@ class PawDrawEditor {
   ready: boolean;
   editable: boolean;
   dimProvider: DimensionProvider;
-  robot: Robot;
-  startPos: PhysicalPos | null;
+  // robot: Robot;
+  startList: NodeList | undefined;
+  listManager: ListManager;
 
   constructor(/** @type {HTMLElement} */ parent: HTMLElement) {
     this.ready = false;
@@ -46,24 +56,27 @@ class PawDrawEditor {
     const robotEl: HTMLElement | null = document.querySelector(".robot");
     if (robotEl) {
       /** used for initializing new Convertible Coordinates */
-      this.dimProvider = new class extends DimensionProvider {
+      this.dimProvider = new (class extends DimensionProvider {
         get robotOffsetWidth() {
-          // @ts-ignore
           return robotEl.offsetWidth;
         }
         get fieldWidth() {
-          // @ts-ignore
           return field.getBoundingClientRect().width;
         }
         get fieldCoord() {
           return field.getBoundingClientRect();
         }
-      };
-      // this.convertGenerator = new ConvertibleCoordinate.Generator(this.dimProvider);
-      this.robot = new Robot(
+      })();
+      this.listManager = new ListManager(
         robotEl,
-        new PhysicalPos({ x: 0, y: 0, heading: 0 }, this.dimProvider)
+        new NodeList(),
+        0,
+        this.dimProvider
       );
+      // this.robot = new Robot(
+      //   robotEl,
+      //   new PhysicalPos({ x: 0, y: 0, heading: 0 }, this.dimProvider)
+      // );
     } else throw "no robot";
 
     // this.robotPos = { x: 0, y: 0, heading: 0 };
@@ -72,7 +85,6 @@ class PawDrawEditor {
     // this.robotHeight = this.robot.getBoundingClientRect().height;
     // this.robotWidth = this.robot.getBoundingClientRect().width;
 
-    this.startPos = null;
     // this.drawingColor = "black";
     // console.log(this.robotPos);
 
@@ -104,9 +116,8 @@ class PawDrawEditor {
 
   setEditable(editable: boolean) {
     this.editable = editable;
-    const colorButtons: NodeListOf<HTMLButtonElement> = (
-      document.querySelectorAll(".drawing-controls button")
-    );
+    const colorButtons: NodeListOf<HTMLButtonElement> =
+      document.querySelectorAll(".drawing-controls button");
     for (const colorButton of Array.from(colorButtons)) {
       colorButton.disabled = !editable;
     }
@@ -295,7 +306,16 @@ class PawDrawEditor {
   // }
 
   updateRobotPosition() {
-    throw new Error("function not implemented");
+    // throw new Error("function not implemented");
+    vscode.postMessage(
+      new Message.ToExtension.Edit(
+        new ListAction.Replace<Node>(
+          this.listManager.index,
+          this.listManager.getCurNode()
+        )
+      )
+    );
+
     // // console.log("update robot pos");
     // const pos = this.robot.getIRLPos();
     // // vscode.postMessage({
@@ -306,23 +326,31 @@ class PawDrawEditor {
   }
 
   _initElements(/** @type {HTMLElement} */ parent: HTMLElement) {
-    let mouseMoveListener = (mouseClientPos: { x: number, y: number }) => {
+    let mouseMoveListener = (mouseClientPos: { x: number; y: number }) => {
       try {
         // let mousePos = this.getLocalFieldPos({ x, y });
-        let mousePos: PhysicalCoord = AbsoluteCoord.fromCenter(mouseClientPos, this.dimProvider).toPhysical();
+        let mousePos: PhysicalCoord = AbsoluteCoord.fromCenter(
+          mouseClientPos,
+          this.dimProvider
+        ).toPhysical();
         mousePos.x = Math.round(mousePos.x);
         mousePos.y = Math.round(mousePos.y);
         // this.setRobotPosition(mousePos);
-        this.robot.goTo(mousePos);
-      } catch (err) { /* console.log(err);  */ }
+        // this.robot.goTo(mousePos);
+        this.listManager.moveRobotTo(mousePos);
+      } catch (err) {
+        /* console.log(err);  */
+      }
     };
-    let mouseRotateListener = ({ x, y }: { x: number, y: number }) => {
+    let mouseRotateListener = ({ x, y }: { x: number; y: number }) => {
       // const robotCenter = this.getRobotAbsoluteCenter();
-      const robotCenter = this.robot.getAbsPos().getCenter();
+      // const robotCenter = this.robot.getAbsPos().getCenter();
+      const robotCenter = this.listManager._robot.getAbsPos().getCenter();
       // console.log(JSON.stringify({ mouse: { x, y }, robot: robotCenter }));
       try {
         // this.setRobotPosition({
-        this.robot.goTo({
+        // this.robot.goTo({
+        this.listManager.moveRobotTo({
           // x: undefined,
           // y: undefined,
           // ...this.robotPos,
@@ -331,10 +359,11 @@ class PawDrawEditor {
             //   /  10
           ) /* * 10, */,
         });
-      } catch { }
+      } catch {}
     };
     // this.robot.addEventListener("mousedown", (ev) => {
-    this.robot.robotEl.addEventListener("mousedown", (ev) => {
+    // this.robot.robotEl.addEventListener("mousedown", (ev) => {
+    this.listManager._robot.robotEl.addEventListener("mousedown", (ev) => {
       // @ts-ignore
       if (!ev.altKey) {
         // case 0: //primary (left)
@@ -364,7 +393,8 @@ class PawDrawEditor {
     });
     window.addEventListener("resize", () => {
       // this.setRobotPosition({}, { check: false });
-      this.robot.resetPos();
+      // this.robot.resetPos();
+      this.listManager._robot.resetPos();
       console.log("resize");
     });
 
@@ -375,9 +405,12 @@ class PawDrawEditor {
         let dir = null;
         switch (ev.key.toLowerCase()) {
           case "r":
-            return this.robot.goTo({
+            // return this.robot.goTo({
+            return this.listManager.moveRobotTo({
               // ...this.robot.getIRLPos(),
-              heading: this.robot.getIRLPos().heading + (ev.shiftKey ? -90 : 90),
+              heading:
+                this.listManager._robot.getIRLPos().heading +
+                (ev.shiftKey ? -90 : 90),
             });
           case "arrowup":
           case "w":
@@ -391,9 +424,9 @@ class PawDrawEditor {
           case "arrowright":
           case "d":
             if (!dir) dir = { x: 1, y: 0 };
-            let currRobotPos = this.robot.getIRLPos();
+            let currRobotPos = this.listManager._robot.getIRLPos();
             // return this.setRobotPosition({
-            return this.robot.goTo({
+            return this.listManager.moveRobotTo({
               ...currRobotPos,
               x: currRobotPos.x + 3 * dir.x,
               y: currRobotPos.y + 3 * dir.y,
@@ -401,9 +434,9 @@ class PawDrawEditor {
           case "c":
             try {
               // this.setRobotPosition({ heading: 0 });
-              this.robot.goTo({ heading: 0 });
+              this.listManager.moveRobotTo({ heading: 0 });
               this.updateRobotPosition();
-            } catch { }
+            } catch {}
             return;
         }
       }
@@ -525,9 +558,9 @@ class PawDrawEditor {
   //  * @param {Uint8Array | undefined} data
   //  */
   // //  * @param {Array<Stroke> | undefined} strokes
-  /* async */ reset(
-    /** @type {{heading: number, x: number, y: number} | null}*/ pos = this.startPos
-  ) {
+  /* async */ reset(data?: string) {
+    return;
+
     // if (data) {
     //   const img = await loadImageFromData(data);
     //   this.initialCanvas.width /* = this.drawingCanvas.width */ = img.naturalWidth;
@@ -539,10 +572,11 @@ class PawDrawEditor {
     // this.strokes = strokes;
     // this._redraw();
     // let str = data.map(String.fromCharCode).join("");
-    if (!this.startPos) this.startPos = pos;
-
+    // if (!this.startList) this.startList = list;
+    // if (list) {
+    // }
     // if (pos) this.setRobotPosition(pos);
-    if (pos) this.robot.goTo(pos);
+    // if (pos) this.robot.goTo(pos);
   }
 
   // /**
@@ -568,27 +602,40 @@ class PawDrawEditor {
 
   // /** @return {Promise<Uint8Array>} */
   async getDocData(): Promise<Uint8Array> {
-
-    return new Uint8Array(Array.from(JSON.stringify(this.robot.getIRLPos())).map((e) => e.charCodeAt(0)));
+    return new Uint8Array(
+      Array.from(JSON.stringify(this.listManager.list)).map((e) =>
+        e.charCodeAt(0)
+      )
+    );
   }
 }
 
+export const editor = new PawDrawEditor(
+  // @ts-ignore
+  document.querySelector(".drawing-canvas")
+);
 
-
-// @ts-ignore
-export const editor = new PawDrawEditor(document.querySelector(".drawing-canvas"));
+function processUint8Array(data: Uint8Array): Node[] {
+  return JSON.parse(String.fromCharCode(...data)) as Node[];
+}
 
 // Handle messages from the extension
 window.addEventListener("message", async ({ data: msg }: { data: Message }) => {
   // const { type, body, requestId } = msg;
   if (!(msg instanceof Message.ToWebview)) return;
   if (msg instanceof Message.ToWebview.GetFileRequest)
-    editor.getDocData().then((data) =>
-      vscode.postMessage(Message.ToExtension.GetFileResponse.fromRequest(msg, data)));
+    editor
+      .getDocData()
+      .then((data) =>
+        vscode.postMessage(
+          Message.ToExtension.GetFileResponse.fromRequest(msg, data)
+        )
+      );
   else if (msg instanceof Message.ToWebview.Initialize) {
-    // init
-  }
-  else if (msg instanceof Message.ToWebview.Update) {
+    if (msg instanceof Message.ToWebview.Initialize.Existing)
+      editor.listManager.list.update(processUint8Array(msg.docData));
+  } else if (msg instanceof Message.ToWebview.Update) {
+    editor.listManager.list.update(processUint8Array(msg.content), msg.edits);
     // update
   }
   return;
