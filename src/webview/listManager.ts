@@ -58,11 +58,13 @@ export default class ListManager {
   }
   /** @throws will throw if index outside of array bounds */
   public goToNext() {
-    this.goToIndex(++this.index);
+    this.index++;
+    this.goToIndex((this.index %= this.list.length));
   }
   /** @throws will throw if index outside of array bounds */
   public goToPrevious() {
-    this.goToIndex(--this.index);
+    this.index--;
+    this.goToIndex((this.index %= this.list.length));
   }
   public setCurrNode({ position: pos, actions: acts }: RecursivePartial<Node>) {
     let { position, actions } = this.getNodeAtIndex();
@@ -97,6 +99,9 @@ export default class ListManager {
   }) {
     this.list.update(content, edits);
     this.setCurrNode({});
+  }
+  public appendNewNode() {
+    this.appendNode({ position: { x: 72, y: 72, heading: 0 } });
   }
 }
 // https://stackoverflow.com/a/51365037

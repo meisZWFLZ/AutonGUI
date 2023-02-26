@@ -459,6 +459,16 @@ class PawDrawEditor {
               this.updateRobotPosition();
             } catch {}
             return;
+          case "n":
+            this.listManager.appendNewNode();
+            this.updateRobotPosition();
+            return;
+          case "j":
+            this.listManager.goToPrevious();
+            return;
+          case "l":
+            this.listManager.goToNext();
+            return;
         }
       }
     });
