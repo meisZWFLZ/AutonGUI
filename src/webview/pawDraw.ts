@@ -3,18 +3,38 @@
 import {
   AbsoluteCoord,
   ConvertibleCoordinate,
+  Coordinate,
   DimensionProvider,
   PhysicalCoord,
   PhysicalPos,
+  Position,
+  Rotatable,
 } from "../common/coordinates.js";
 import Message from "../common/message.js";
-import NodeList from "../common/nodeList.js";
-import type { Node } from "../common/node.js";
+import NodeList from "./nodeList.js";
+import type { Action, Node as MyNode } from "../common/node.js";
 import ListManager from "./listManager.js";
-import { ListAction } from "../common/eventList.js";
+import { ListAction, LIST_ACTION_TYPE } from "./eventList.js";
 
 // @ts-ignore
 const vscode = acquireVsCodeApi();
+
+class JSONConversions {
+  static toUint8Array(obj: any): Uint8Array {
+    return new Uint8Array(
+      Array.from(JSON.stringify(obj)).map((e) => e.charCodeAt(0))
+    );
+  }
+  static toJSON(data: Uint8Array): any {
+    return JSON.parse(String.fromCharCode(...data));
+  }
+  static fromJSON = this.toUint8Array;
+  static fromUint8Array = this.toJSON;
+}
+class MyNodeClass implements MyNode {
+  position: Position = { x: 0, y: 0, heading: 0 };
+  actions?: Action[] | undefined;
+}
 
 // /**
 //  * @param {Uint8Array} initialContent
@@ -307,9 +327,10 @@ class PawDrawEditor {
 
   updateRobotPosition() {
     // throw new Error("function not implemented");
+    console.log("update", this.listManager.getCurNode());
     vscode.postMessage(
       new Message.ToExtension.Edit(
-        new ListAction.Replace<Node>(
+        new ListAction.Replace<MyNode>(
           this.listManager.index,
           this.listManager.getCurNode()
         )
@@ -558,25 +579,80 @@ class PawDrawEditor {
   //  * @param {Uint8Array | undefined} data
   //  */
   // //  * @param {Array<Stroke> | undefined} strokes
-  /* async */ reset(data?: string) {
-    return;
+  // /* async */ reset(data?: string) {
+  // return;
 
-    // if (data) {
-    //   const img = await loadImageFromData(data);
-    //   this.initialCanvas.width /* = this.drawingCanvas.width */ = img.naturalWidth;
-    //   this.initialCanvas.height /* = this.drawingCanvas.height */ =
-    //     img.naturalHeight;
-    //   this.initialCtx.drawImage(img, 0, 0);
-    //   this.ready = true;
-    // }
-    // this.strokes = strokes;
-    // this._redraw();
-    // let str = data.map(String.fromCharCode).join("");
-    // if (!this.startList) this.startList = list;
-    // if (list) {
-    // }
-    // if (pos) this.setRobotPosition(pos);
-    // if (pos) this.robot.goTo(pos);
+  // if (data) {
+  //   const img = await loadImageFromData(data);
+  //   this.initialCanvas.width /* = this.drawingCanvas.width */ = img.naturalWidth;
+  //   this.initialCanvas.height /* = this.drawingCanvas.height */ =
+  //     img.naturalHeight;
+  //   this.initialCtx.drawImage(img, 0, 0);
+  //   this.ready = true;
+  // }
+  // this.strokes = strokes;
+  // this._redraw();
+  // let str = data.map(String.fromCharCode).join("");
+  // if (!this.startList) this.startList = list;
+  // if (list) {
+  // }
+  // if (pos) this.setRobotPosition(pos);
+  // if (pos) this.robot.goTo(pos);
+  // }
+
+  update({
+    content,
+    edits = [],
+  }: {
+    content: Uint8Array;
+    edits?: ListAction<MyNode>[];
+  }) {
+    let nodeArr;
+    try {
+      nodeArr = JSONConversions.fromUint8Array(content);
+      if (!(nodeArr instanceof Array))
+        throw new Error("not instance of Node[]");
+      if (!(nodeArr[0] instanceof MyNodeClass))
+        throw new Error("not instance of Node[]");
+    } catch {}
+    return this.listManager.update({
+      content: nodeArr,
+      edits: edits.map((e) => {
+        switch (e.type) {
+          case LIST_ACTION_TYPE.APPEND: {
+            Object.setPrototypeOf(
+              e,
+              Object.getPrototypeOf(ListAction.Append<MyNode>).Append.prototype
+            );
+            break;
+          }
+          case LIST_ACTION_TYPE.REMOVE: {
+            Object.setPrototypeOf(
+              e,
+              Object.getPrototypeOf(ListAction.Remove<MyNode>).Remove.prototype
+            );
+            break;
+          }
+
+          case LIST_ACTION_TYPE.REPLACE: {
+            Object.setPrototypeOf(
+              e,
+              Object.getPrototypeOf(ListAction.Replace<MyNode>).Replace
+                .prototype
+            );
+            break;
+          }
+          case LIST_ACTION_TYPE.INSERT: {
+            Object.setPrototypeOf(
+              e,
+              Object.getPrototypeOf(ListAction.Insert<MyNode>).Insert.prototype
+            );
+            break;
+          }
+        }
+        return e as ListAction<MyNode>;
+      }) /*  as unknown as ListAction<MyNode>[] */,
+    });
   }
 
   // /**
@@ -602,6 +678,12 @@ class PawDrawEditor {
 
   // /** @return {Promise<Uint8Array>} */
   async getDocData(): Promise<Uint8Array> {
+    // let x = new Uint8Array(
+    //   Array.from(JSON.stringify(this.listManager.list)).map((e) =>
+    //     e.charCodeAt(0)
+    //   )
+    // );
+    // console.log("arr", x);
     return new Uint8Array(
       Array.from(JSON.stringify(this.listManager.list)).map((e) =>
         e.charCodeAt(0)
@@ -615,15 +697,12 @@ export const editor = new PawDrawEditor(
   document.querySelector(".drawing-canvas")
 );
 
-function processUint8Array(data: Uint8Array): Node[] {
-  return JSON.parse(String.fromCharCode(...data)) as Node[];
-}
-
 // Handle messages from the extension
 window.addEventListener("message", async ({ data: msg }: { data: Message }) => {
+  console.log("from extension", msg);
   // const { type, body, requestId } = msg;
-  if (!(msg instanceof Message.ToWebview)) return;
-  if (msg instanceof Message.ToWebview.GetFileRequest)
+  if (!Message.ToWebview.test(msg)) return;
+  if (Message.ToWebview.GetFileRequest.test(msg))
     editor
       .getDocData()
       .then((data) =>
@@ -631,13 +710,15 @@ window.addEventListener("message", async ({ data: msg }: { data: Message }) => {
           Message.ToExtension.GetFileResponse.fromRequest(msg, data)
         )
       );
-  else if (msg instanceof Message.ToWebview.Initialize) {
-    if (msg instanceof Message.ToWebview.Initialize.Existing)
-      editor.listManager.list.update(processUint8Array(msg.docData));
-  } else if (msg instanceof Message.ToWebview.Update) {
-    editor.listManager.list.update(processUint8Array(msg.content), msg.edits);
+  else if (Message.ToWebview.Initialize.test(msg)) {
+    if (Message.ToWebview.Initialize.Existing.test(msg))
+      // editor.listManager.list.update(processUint8Array(msg.content));
+      editor.update(msg);
+  } else if (Message.ToWebview.Update.test(msg))
     // update
-  }
+    // editor.listManager.list.update(processUint8Array(msg.content), msg.edits);
+    editor.update(msg);
+
   return;
   // switch (type) {
   //   case "update": {

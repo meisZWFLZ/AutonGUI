@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { Disposable, disposeAll } from "./dispose";
 import { getNonce } from "./util";
 import Message from "../common/message";
-import { ListAction } from "../common/eventList";
+import { ListAction } from "../webview/eventList";
 import { Node } from "../common/node";
 
 /**
@@ -127,6 +127,7 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
     this._onDidChange.fire({
       label: "Stroke",
       undo: async () => {
+        console.log("undo");
         this._edits.pop();
         this._onDidChangeDocument.fire({
           edits: this._edits,
@@ -284,11 +285,24 @@ export class PawDrawEditorProvider
           if (!webviewsForDocument.length) {
             throw new Error("Could not find webview to save for");
           }
+          // let x = (
+          //   await this.postMessageWithResponse<
+          //     typeof Message.ToExtension.GetFileResponse.prototype
+          //   >(
+          //     webviewsForDocument[0],
+          //     /* 'getFileData', {} */ new Message.ToWebview.GetFileRequest()
+          //   )
+          // ).docData;
+          // console.log("receivedArr", x);
           return new Uint8Array(
-            await this.postMessageWithResponse<number[]>(
-              webviewsForDocument[0],
-              /* 'getFileData', {} */ new Message.ToWebview.GetFileRequest()
-            )
+            (
+              await this.postMessageWithResponse<
+                typeof Message.ToExtension.GetFileResponse.prototype
+              >(
+                webviewsForDocument[0],
+                /* 'getFileData', {} */ new Message.ToWebview.GetFileRequest()
+              )
+            ).docData
           );
         },
       }
@@ -314,6 +328,8 @@ export class PawDrawEditorProvider
           // 	edits: e.edits,
           // 	content: e.content,
           // });
+          console.log("onDidChangeContent", e);
+
           this.postMessage(
             webviewPanel,
             new Message.ToWebview.Update(e.edits, e.content)
@@ -346,9 +362,9 @@ export class PawDrawEditorProvider
     );
 
     // Wait for the webview to be properly ready before we init
-    webviewPanel.webview.onDidReceiveMessage(async (e: Message) => {
-      if (!(e instanceof Message.ToExtension)) return;
-      if (e instanceof Message.ToExtension.Ready)
+    webviewPanel.webview.onDidReceiveMessage(async (msg: Message) => {
+      if (!Message.ToExtension.test(msg)) return;
+      if (Message.ToExtension.Ready.test(msg))
         if (document.uri.scheme === "untitled")
           this.postMessage(
             webviewPanel,
@@ -358,7 +374,7 @@ export class PawDrawEditorProvider
           this.postMessage(
             webviewPanel,
             new Message.ToWebview.Initialize.Existing({
-              docData: document.documentData,
+              content: document.documentData,
               editable: vscode.workspace.fs.isWritableFileSystem(
                 document.uri.scheme
               ),
@@ -530,10 +546,11 @@ ${
   }
 
   private onMessage(document: PawDrawDocument, msg: Message) {
-    if (!(msg instanceof Message.ToExtension)) return;
-    if (msg instanceof Message.ToExtension.Edit) document.makeEdit(msg.edit);
-    else if (msg instanceof Message.ToExtension.GetFileResponse) {
-      console.log(msg);
+    // console.log(msg);
+    if (!Message.ToExtension.test(msg)) return;
+    if (Message.ToExtension.Edit.test(msg)) document.makeEdit(msg.edit);
+    else if (Message.ToExtension.GetFileResponse.test(msg)) {
+      // console.log(msg);
       this._callbacks.get(msg.id)?.(msg);
       // callback?.(msg);
     }

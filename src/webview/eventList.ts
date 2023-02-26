@@ -47,7 +47,7 @@ export namespace ListAction {
   export class Replace<T> extends ListAction<T> {
     public override readonly type: LIST_ACTION_TYPE.REPLACE =
       LIST_ACTION_TYPE.REPLACE;
-    oldElement: T[] | undefined;
+    public oldElement: T[] | undefined;
     constructor(public readonly index: number, public readonly newElement: T) {
       super(LIST_ACTION_TYPE.REPLACE);
     }
@@ -65,7 +65,7 @@ export namespace ListAction {
   export class Remove<T> extends ListAction<T> {
     public override readonly type: LIST_ACTION_TYPE.REMOVE =
       LIST_ACTION_TYPE.REMOVE;
-    private removedElements: T[] | undefined;
+    public removedElements: T[] | undefined;
 
     constructor(public readonly index: number, public readonly count: number) {
       super(LIST_ACTION_TYPE.REMOVE);
@@ -86,7 +86,7 @@ export namespace ListAction {
  * List modifiable by firing events
  * also implements undo and redo
  */
-export default class EventList<T> extends EventEmitter {
+export default class EventList<T> {
   protected _list: T[];
   private undoStack: ListAction<T>[] = [];
   private redoStack: ListAction<T>[] = [];
@@ -100,38 +100,47 @@ export default class EventList<T> extends EventEmitter {
     this.undoStack.push(action);
     this.redoStack = [];
   }
-
   constructor(list?: T[]) {
-    super();
+    // super();
     this._list = list || [];
-    this.on("add", ({ element }: { element: T }) =>
-      this.performNewAction(new ListAction.Append<T>(element))
-    );
-    this.on("insert", ({ el, index }: { el: T; index: number }) =>
-      this.performNewAction(new ListAction.Insert<T>(index, el))
-    );
-    this.on("replace", ({ el, index }: { el: T; index: number }) =>
-      this.performNewAction(new ListAction.Replace<T>(index, el))
-    );
-    this.on("remove", ({ count, index }: { count: number; index: number }) =>
-      this.performNewAction(new ListAction.Remove<T>(index, count))
-    );
+    // this.addEventListener("add", ({ element }: { element: T }) =>
+    //   this.performNewAction(new ListAction.Append<T>(element))
+    // );
+    // this.addEventListener("insert", ({ el, index }: { el: T; index: number }) =>
+    //   this.performNewAction(new ListAction.Insert<T>(index, el))
+    // );
+    // this.addEventListener("replace", ({ el, index }: { el: T; index: number }) =>
+    //   this.performNewAction(new ListAction.Replace<T>(index, el))
+    // );
+    // this.addEventListener("remove", ({ count, index }: { count: number; index: number }) =>
+    //   this.performNewAction(new ListAction.Remove<T>(index, count))
+    // );
   }
 
-  public add(newElement: T) {
-    this.emit("add", newElement);
+  public add({ newElement }: { newElement: T }): void {
+    // this.emit("add", newElement);
+    this.performNewAction(new ListAction.Append<T>(newElement));
   }
 
-  public insert(index: number, newElement: T) {
-    this.emit("insert", index, newElement);
+  public insert({ index, newElement }: { index: number; newElement: T }): void {
+    // this.emit("insert", index, newElement);
+    this.performNewAction(new ListAction.Insert<T>(index, newElement));
   }
 
-  public replace(index: number, newElement: T) {
-    this.emit("replace", index, newElement);
+  public replace({
+    index,
+    newElement,
+  }: {
+    index: number;
+    newElement: T;
+  }): void {
+    // this.emit("replace", index, newElement);
+    this.performNewAction(new ListAction.Replace<T>(index, newElement));
   }
 
-  public remove(index: number, count: number = 1) {
-    this.emit("remove", index, count);
+  public remove({ index, count = 1 }: { index: number; count?: number }): void {
+    // this.emit("remove", index, count);
+    this.performNewAction(new ListAction.Remove<T>(index, count));
   }
 
   public get({

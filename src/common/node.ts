@@ -26,4 +26,4 @@ export abstract class Action {
 	}
 }
 /** @param actions must not be empty */
-export type Node = { position: Position | Coordinate | Rotatable, actions?: Action[] };
+export type Node = { position: Position /* | Coordinate | Rotatable */, actions?: Action[] };

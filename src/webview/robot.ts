@@ -1,4 +1,10 @@
-import { AbsoluteCoord, AbsolutePos, PhysicalCoord, PhysicalPos, RelativeCoord } from "../common/coordinates.js";
+import {
+  AbsoluteCoord,
+  AbsolutePos,
+  PhysicalCoord,
+  PhysicalPos,
+  RelativeCoord,
+} from "../common/coordinates.js";
 // console.log(Coordinates)
 // let { AbsoluteCoord, PhysicalCoord, PhysicalPos } = Coordinates;
 /* 
@@ -70,25 +76,29 @@ export class Robot {
   getAbsPos(): AbsoluteCoord {
     const robotBounds = this.robotEl.getBoundingClientRect();
     const halfRobotWidth = this.robotEl.offsetWidth / 2;
-    return AbsolutePos.fromCenter({
-      ...this.#setPos,
-      x: robotBounds.left + halfRobotWidth,
-      y: robotBounds.top + halfRobotWidth,
-    }, this.#pos._dimProvider);
+    return AbsolutePos.fromCenter(
+      {
+        ...this.#setPos,
+        x: robotBounds.left + halfRobotWidth,
+        y: robotBounds.top + halfRobotWidth,
+      },
+      this.#pos._dimProvider
+    );
   }
   /**
    * move bot to IRL pos
    * @param {PhysicalPos | PhysicalCoord | {heading: number}} pos
    */
   goTo(pos: any = this.#pos, opts: { duration: number } = { duration: 200 }) {
-    pos = new PhysicalPos({ ...this.#pos, ...pos }, this.#pos._dimProvider)
+    pos = new PhysicalPos({ ...this.#pos, ...pos }, this.#pos._dimProvider);
     // console.log(pos);
     if (
-      (pos.x == this.#pos.x) &&
-      (pos.y == this.#pos.y) &&
-      (pos.heading == this.#pos.heading)
-    )
+      pos.x == this.#pos.x &&
+      pos.y == this.#pos.y &&
+      pos.heading == this.#pos.heading
+    ) {
       throw "no change in robot position";
+    }
     this.#setPos(pos, opts);
   }
 
@@ -103,7 +113,10 @@ export class Robot {
    * move bot to IRL pos
    * @param {PhysicalPos} pos
    */
-  #setPos(pos: PhysicalPos, opts: { duration: number } = { duration: 200 }): string {
+  #setPos(
+    pos: PhysicalPos,
+    opts: { duration: number } = { duration: 200 }
+  ): string {
     // if (pos.heading != undefined) this.#pos.heading = pos.heading;
     // if (pos.x != undefined) this.#pos.x = pos.x;
     // if (pos.y != undefined) this.#pos.y = pos.y;
@@ -114,23 +127,33 @@ export class Robot {
     const horizontalRadius = Math.ceil(
       ((Math.sqrt(2 * Math.pow(this.#radiusIRL, 2)) - this.#radiusIRL) *
         (1 - Math.cos((4 * this.#pos.heading * Math.PI) / 180))) /
-      2 +
-      this.#radiusIRL
+        2 +
+        this.#radiusIRL
     );
 
     // maximum possible x pos for bot
     const maxX = irlFieldLength - horizontalRadius;
 
-    this.#pos.x = Math.max(Math.min(Math.round(this.#pos.x), maxX), horizontalRadius);
-    this.#pos.y = Math.max(Math.min(Math.round(this.#pos.y), maxX), horizontalRadius);
+    this.#pos.x = Math.max(
+      Math.min(Math.round(this.#pos.x), maxX),
+      horizontalRadius
+    );
+    this.#pos.y = Math.max(
+      Math.min(Math.round(this.#pos.y), maxX),
+      horizontalRadius
+    );
 
     // console.log(pos);
     const relPos = pos.toRelative();
-    const transform = `translate(${relPos.x}px, ${relPos.y
-      }px)rotate(${(this.#pos.heading %= 360)}deg)`;
-    this.robotEl.animate([{ transform: this.robotEl.style.transform }, { transform }], {
-      duration: opts.duration,
-    });
+    const transform = `translate(${relPos.x}px, ${
+      relPos.y
+    }px)rotate(${(this.#pos.heading %= 360)}deg)`;
+    this.robotEl.animate(
+      [{ transform: this.robotEl.style.transform }, { transform }],
+      {
+        duration: opts.duration,
+      }
+    );
     // @ts-ignore
     return (this.robotEl.style.transform = transform);
   }
@@ -142,7 +165,10 @@ export class Robot {
    * @param {PhysicalPos} pos
    * @param {{followCursor: boolean}} opts
    */
-  constructor(element: HTMLElement, pos: PhysicalPos, /* opts = { followCursor: true } */) {
+  constructor(
+    element: HTMLElement,
+    pos: PhysicalPos /* opts = { followCursor: true } */
+  ) {
     this.robotEl = element;
     this.#pos = pos;
     // could be changed for custom robot length
