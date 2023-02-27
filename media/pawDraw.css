@@ -25,9 +25,11 @@ body {
   align-items: end;
 
   background-image: url("./SpinUpField.svg");
-  background-repeat: no-repeat;
+  /*   background-repeat: no-repeat;
   background-position: center;
-  background-size: contain;
+  background-size: contain; */
+
+  user-select: none;
 }
 
 /* .field:after {
@@ -55,12 +57,12 @@ body {
 } */
 
 /* 	position: fixed;
-	width: 100px;
-	height: 100px;
-	right:50%;
-	bottom: 50%;
-	z-index:100;
- */
+width: 100px;
+height: 100px;
+right:50%;
+bottom: 50%;
+z-index:100;
+*/
 
 .actions {
   position: fixed;
@@ -79,18 +81,21 @@ body {
   align-items: start;
   font-family: Consolas, "Courier New", monospace;
   font-size: 3.5em;
+
+  user-select: text;
 }
 
 .actions button {
   position: relative;
   width: 100px;
   height: 100px;
-  background: none;
-  border: none;
+  /* background: none; */
+  /* border: none; */
   transform: translateY(30%);
-  transition: transform 0.1s linear;
+  /* transition: transform 0.1s linear; */
   outline: none;
   opacity: 0.5;
+  margin: 1.5%;
 }
 
 /* .actions button:disabled {

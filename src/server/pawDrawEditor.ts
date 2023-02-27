@@ -127,7 +127,7 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
     this._onDidChange.fire({
       label: "Stroke",
       undo: async () => {
-        console.log("undo");
+        // console.log("undo");
         this._edits.pop();
         this._onDidChangeDocument.fire({
           edits: this._edits,
@@ -328,7 +328,7 @@ export class PawDrawEditorProvider
           // 	edits: e.edits,
           // 	content: e.content,
           // });
-          console.log("onDidChangeContent", e);
+          // console.log("onDidChangeContent", e);
 
           this.postMessage(
             webviewPanel,

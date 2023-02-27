@@ -101,7 +101,7 @@ class PawDrawEditor {
         new NodeList(),
         0,
         this.dimProvider,
-        this.updateRobotPosition.bind(this),
+        this.postLastEdit.bind(this),
         this.setIndex.bind(this)
       );
       // this.robot = new Robot(
@@ -130,7 +130,6 @@ class PawDrawEditor {
   }
 
   setIndex(index: number) {
-    console.log();
     this.indexEl.textContent = index.toString();
   }
 
@@ -341,11 +340,13 @@ class PawDrawEditor {
   //   // @ts-ignore
   //   return (this.robot.style.transform = transform);
   // }
-
-  updateRobotPosition() {
+  postEdit(editMsg: typeof Message.ToExtension.Edit.prototype) {
+    vscode.postMessage(editMsg);
+  }
+  postLastEdit() {
     // throw new Error("function not implemented");
-    console.log("update", this.listManager.list.getEdits());
-    vscode.postMessage(
+    // console.log("update", this.listManager.list.getEdits());
+    this.postEdit(
       new Message.ToExtension.Edit(
         this.listManager.list.getEdits()[
           this.listManager.list.getEdits().length - 1
@@ -397,7 +398,7 @@ class PawDrawEditor {
         document.addEventListener(
           "mouseup",
           () => {
-            this.updateRobotPosition();
+            this.postLastEdit();
             document.removeEventListener("mousemove", mouseMoveListener);
           },
           { once: true }
@@ -435,7 +436,7 @@ class PawDrawEditor {
         document.addEventListener(
           "mouseup",
           () => {
-            this.updateRobotPosition();
+            this.postLastEdit();
             document.removeEventListener("mousemove", mouseRotateListener);
           },
           { once: true }
@@ -447,7 +448,7 @@ class PawDrawEditor {
       // this.setRobotPosition({}, { check: false });
       // this.robot.resetPos();
       this.listManager._robot.resetPos();
-      console.log("resize");
+      // console.log("resize");
     });
 
     window.addEventListener("keydown", (ev) => {
@@ -487,12 +488,12 @@ class PawDrawEditor {
             try {
               // this.setRobotPosition({ heading: 0 });
               this.listManager.moveRobotTo({ heading: 0 });
-              this.updateRobotPosition();
+              this.postLastEdit();
             } catch {}
             return;
           case "n":
-            this.listManager.appendNewNode();
-            this.updateRobotPosition();
+            this.listManager.insertNewNodeAfterCur();
+            this.postLastEdit();
             return;
           case "j":
             this.listManager.goToPrevious();
@@ -506,6 +507,8 @@ class PawDrawEditor {
     window.addEventListener("keyup", (ev) => {
       // console.log(ev);
       switch (ev.key.toLowerCase()) {
+        case "delete":
+          this.listManager.removeCurNode();
         case "r":
         case "arrowup":
         case "w":
@@ -515,7 +518,7 @@ class PawDrawEditor {
         case "a":
         case "arrowright":
         case "d":
-          this.updateRobotPosition();
+          this.postLastEdit();
           break;
       }
     });
@@ -739,7 +742,7 @@ export const editor = new PawDrawEditor(
 
 // Handle messages from the extension
 window.addEventListener("message", async ({ data: msg }: { data: Message }) => {
-  console.log("from extension", msg);
+  // console.log("from extension", msg);
   // const { type, body, requestId } = msg;
   if (!Message.ToWebview.test(msg)) return;
   if (Message.ToWebview.GetFileRequest.test(msg))

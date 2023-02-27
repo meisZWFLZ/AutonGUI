@@ -10,17 +10,18 @@ export default class NodeList extends EventList<Node> {
   }
 
   public toJSON(): Node[] {
-    console.log(this);
+    // console.log(this)
+
     return super.get({ all: true });
   }
 
   public update(content?: Node[], edits?: ListAction<Node>[]) {
-    console.log("edits", edits, "arr", this.startList);
+    // console.log("edits", edits, "arr", this.startList);
     if (content) {
       this.setList(content);
-      this.startList = content;
+      this.startList = structuredClone(content);
     } else this.setList(structuredClone(this.startList));
     for (const edit of edits || []) this.performNewAction(edit);
-    console.log("result", this);
+    // console.log("result", this);
   }
 }

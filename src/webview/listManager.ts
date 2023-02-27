@@ -82,14 +82,11 @@ export default class ListManager {
   }
   /** @throws will throw if index outside of array bounds */
   public goToNext() {
-    this.goToIndex((this.index + 1) % this.list.length);
+    this.goToIndex(this._fixIndexWrap(++this.index));
   }
   /** @throws will throw if index outside of array bounds */
   public goToPrevious() {
-    this.goToIndex(
-      (this.index > 0 ? this.index - 1 : this.list.length - 1) %
-        this.list.length
-    );
+    this.goToIndex(this._fixIndexWrap(--this.index));
   }
   public setCurrNode(
     { position: pos, actions: acts }: Node,
@@ -112,11 +109,30 @@ export default class ListManager {
     this.setCurrNode({ position: this.getCurPos(), actions }, { move: false });
   }
   public insertAfterCurNode(node: Node) {
-    this.list.insert({ newElement: node, index: this.index + 1 });
-    this.index++;
+    this.list.insert({ newElement: node, index: this.index++ });
+  }
+  /** checks if index is in bounds, if not, it will return it in bounds using modulo*/
+  public _fixIndexWrap(index: number = this.index): number {
+    return (index =
+      (index < 0 ? this.list.length : 0) + (index % this.list.length));
+  }
+  /** checks if index is in bounds, if not, it will return it in bounds by shifting the number in bounds*/
+  public _fixIndexShift(index: number = this.index): number {
+    return (index = Math.min(Math.max(index, 0), this.list.length - 1));
   }
   public appendNode(node: Node) {
     this.list.add({ newElement: node });
+  }
+  public removeNodeAt(index: number = this.index) {
+    if (this.list.length > 1) {
+      this.list.remove({ index: this.index });
+      this.index = this._fixIndexShift();
+      this.updateRobotPos();
+      this.updateActions();
+    }
+  }
+  public removeCurNode() {
+    this.removeNodeAt();
   }
   public moveRobotTo(pos: Partial<PhysicalPos>) {
     const { position, actions } = this.getCurNode();
@@ -139,6 +155,10 @@ export default class ListManager {
   protected updateActions() {
     this._actionsManager.setActions(this.getCurActions());
   }
+
+  // public removeNode() {
+
+  // }
   public update({
     content,
     edits = [],
@@ -146,7 +166,7 @@ export default class ListManager {
     content?: Node[];
     edits: ListAction<Node>[];
   }) {
-    console.log("update", structuredClone({ content, edits }));
+    // console.log("update", structuredClone({ content, edits }));
     this.list.update(content, edits);
     // this.moveRobotTo({});
     this.updateActions();
