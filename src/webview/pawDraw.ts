@@ -12,7 +12,7 @@ import {
 } from "../common/coordinates.js";
 import Message from "../common/message.js";
 import NodeList from "./nodeList.js";
-import type { Action, Node as MyNode } from "../common/node.js";
+import type { ACTION, Node as MyNode } from "../common/node.js";
 import ListManager from "./listManager.js";
 import { ListAction, LIST_ACTION_TYPE } from "./eventList.js";
 
@@ -33,7 +33,7 @@ class JSONConversions {
 }
 class MyNodeClass implements MyNode {
   position: Position = { x: 0, y: 0, heading: 0 };
-  actions?: Action[] | undefined;
+  actions?: ACTION[] | undefined;
 }
 
 // /**
@@ -64,6 +64,7 @@ class PawDrawEditor {
   // robot: Robot;
   startList: NodeList | undefined;
   listManager: ListManager;
+  indexEl: HTMLElement;
 
   constructor(/** @type {HTMLElement} */ parent: HTMLElement) {
     this.ready = false;
@@ -73,6 +74,13 @@ class PawDrawEditor {
     const field = document.querySelector(".field");
     if (!field) throw "no field";
 
+    const _indexEl: HTMLElement | null = document.querySelector(".index");
+    if (!_indexEl) throw "no index element";
+    this.indexEl = _indexEl;
+
+    const actionsContainer: HTMLElement | null =
+      document.querySelector(".actions");
+    if (!actionsContainer) throw "no actions container";
     const robotEl: HTMLElement | null = document.querySelector(".robot");
     if (robotEl) {
       /** used for initializing new Convertible Coordinates */
@@ -89,9 +97,12 @@ class PawDrawEditor {
       })();
       this.listManager = new ListManager(
         robotEl,
+        actionsContainer,
         new NodeList(),
         0,
-        this.dimProvider
+        this.dimProvider,
+        this.updateRobotPosition.bind(this),
+        this.setIndex.bind(this)
       );
       // this.robot = new Robot(
       //   robotEl,
@@ -114,7 +125,13 @@ class PawDrawEditor {
     // /** @type {Stroke | undefined} */
     // this.currentStroke = undefined;
 
+    this.setIndex(0);
     this._initElements(parent);
+  }
+
+  setIndex(index: number) {
+    console.log();
+    this.indexEl.textContent = index.toString();
   }
 
   // addPoint(/** @type {number} */ x, /** @type {number} */ y) {
@@ -327,13 +344,16 @@ class PawDrawEditor {
 
   updateRobotPosition() {
     // throw new Error("function not implemented");
-    console.log("update", this.listManager.getCurNode());
+    console.log("update", this.listManager.list.getEdits());
     vscode.postMessage(
       new Message.ToExtension.Edit(
-        new ListAction.Replace<MyNode>(
-          this.listManager.index,
-          this.listManager.getCurNode()
-        )
+        this.listManager.list.getEdits()[
+          this.listManager.list.getEdits().length - 1
+        ]
+        // new ListAction.Replace<MyNode>(
+        //   this.listManager.index,
+        //   this.listManager.getCurNode()
+        // )
       )
     );
 
@@ -347,48 +367,33 @@ class PawDrawEditor {
   }
 
   _initElements(/** @type {HTMLElement} */ parent: HTMLElement) {
-    let mouseMoveListener = (mouseClientPos: { x: number; y: number }) => {
-      try {
-        // let mousePos = this.getLocalFieldPos({ x, y });
-        let mousePos: PhysicalCoord = AbsoluteCoord.fromCenter(
-          mouseClientPos,
-          this.dimProvider
-        ).toPhysical();
-        mousePos.x = Math.round(mousePos.x);
-        mousePos.y = Math.round(mousePos.y);
-        // this.setRobotPosition(mousePos);
-        // this.robot.goTo(mousePos);
-        this.listManager.moveRobotTo(mousePos);
-      } catch (err) {
-        /* console.log(err);  */
-      }
-    };
-    let mouseRotateListener = ({ x, y }: { x: number; y: number }) => {
-      // const robotCenter = this.getRobotAbsoluteCenter();
-      // const robotCenter = this.robot.getAbsPos().getCenter();
-      const robotCenter = this.listManager._robot.getAbsPos().getCenter();
-      // console.log(JSON.stringify({ mouse: { x, y }, robot: robotCenter }));
-      try {
-        // this.setRobotPosition({
-        // this.robot.goTo({
-        this.listManager.moveRobotTo({
-          // x: undefined,
-          // y: undefined,
-          // ...this.robotPos,
-          heading: Math.round(
-            Math.atan2(x - robotCenter.x, robotCenter.y - y) * (180 / Math.PI)
-            //   /  10
-          ) /* * 10, */,
-        });
-      } catch {}
-    };
     // this.robot.addEventListener("mousedown", (ev) => {
     // this.robot.robotEl.addEventListener("mousedown", (ev) => {
     this.listManager._robot.robotEl.addEventListener("mousedown", (ev) => {
       // @ts-ignore
       if (!ev.altKey) {
+        let mouseMoveAbort = new AbortController();
+        let mouseMoveListener = (ev: MouseEvent) => {
+          try {
+            // let mousePos = this.getLocalFieldPos({ x, y });
+            let mousePos: PhysicalCoord = AbsoluteCoord.fromCenter(
+              ev,
+              this.dimProvider
+            ).toPhysical();
+            mousePos.x = Math.round(mousePos.x);
+            mousePos.y = Math.round(mousePos.y);
+            // this.setRobotPosition(mousePos);
+            // this.robot.goTo(mousePos);
+            this.listManager.moveRobotTo(mousePos);
+          } catch (err) {
+            /* console.log(err);  */
+          }
+          if (!(ev.buttons % 2)) mouseMoveAbort.abort();
+        };
         // case 0: //primary (left)
-        document.addEventListener("mousemove", mouseMoveListener);
+        document.addEventListener("mousemove", mouseMoveListener, {
+          signal: mouseMoveAbort.signal,
+        });
         document.addEventListener(
           "mouseup",
           () => {
@@ -399,8 +404,34 @@ class PawDrawEditor {
         );
         return;
       } else {
+        let mouseRotateAbort = new AbortController();
+        let mouseRotateListener = ({ x, y, buttons }: MouseEvent) => {
+          // const robotCenter = this.getRobotAbsoluteCenter();
+          // const robotCenter = this.robot.getAbsPos().getCenter();
+          const robotCenter = this.listManager._robot.getAbsPos().getCenter();
+          // console.log(JSON.stringify({ mouse: { x, y }, robot: robotCenter }));
+          try {
+            // this.setRobotPosition({
+            // this.robot.goTo({
+            this.listManager.moveRobotTo({
+              // x: undefined,
+              // y: undefined,
+              // ...this.robotPos,
+              heading: Math.round(
+                Math.atan2(x - robotCenter.x, robotCenter.y - y) *
+                  (180 / Math.PI)
+                //   /  10
+              ) /* * 10, */,
+            });
+          } catch {}
+          if (!(buttons % 2)) {
+            mouseRotateAbort.abort();
+          }
+        };
         // case 2: // secondary (right)
-        document.addEventListener("mousemove", mouseRotateListener);
+        document.addEventListener("mousemove", mouseRotateListener, {
+          signal: mouseRotateAbort.signal,
+        });
         document.addEventListener(
           "mouseup",
           () => {
@@ -488,7 +519,6 @@ class PawDrawEditor {
           break;
       }
     });
-
     // const colorButtons = /** @type {NodeListOf<HTMLButtonElement>} */ (document.querySelectorAll('.drawing-controls button'));
     // for (const colorButton of colorButtons) {
     // 	colorButton.addEventListener('click', e => {

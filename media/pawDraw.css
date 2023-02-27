@@ -24,7 +24,7 @@ body {
   justify-content: left;
   align-items: end;
 
-  background-image: url("./SpinUpField.png");
+  background-image: url("./SpinUpField.svg");
   background-repeat: no-repeat;
   background-position: center;
   background-size: contain;
@@ -61,72 +61,106 @@ body {
 	bottom: 50%;
 	z-index:100;
  */
-/*
-.drawing-controls {
-	position: fixed;
-	bottom: 0;
-	left: 0;
-	width: 100%;
-	display: flex;
-	justify-content: center;
+
+.actions {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+.index {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: right;
+  align-items: start;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 3.5em;
 }
 
-.drawing-controls button {
-	position: relative;
-	width: 100px;
-	height: 100px;
-	background: none;
-	border: none;
-	transform: translateY(30%);
-	transition: transform 0.1s linear;
-	outline: none;
+.actions button {
+  position: relative;
+  width: 100px;
+  height: 100px;
+  background: none;
+  border: none;
+  transform: translateY(30%);
+  transition: transform 0.1s linear;
+  outline: none;
+  opacity: 0.5;
 }
 
-.drawing-controls button:disabled {
-	opacity: 0.5;
+/* .actions button:disabled {
+  opacity: 0.5;
+} */
+.actions button.active {
+  opacity: 1;
 }
-
-.drawing-controls button.active:not(:disabled),
-.drawing-controls button:hover:not(:disabled) {
+/* .actions button.active:not(:disabled), */
+/* .actions button:hover:not(:disabled) {
 	transform: translateY(10%);
+} */
+
+.actions button:before,
+.actions button:after {
+  display: block;
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
 }
 
-.drawing-controls button:before,
-.drawing-controls button:after {
-	display: block;
-	content: '';
-	position: absolute;
-	top: 0;
-	left: 0;
-	width: 100%;
-	height: 100%;
-}
-
-.drawing-controls button:before {
+/* .actions button:before {
 	-webkit-mask: url("./paw-color.svg")  no-repeat 50% 50%;
-}
+} */
 
-.drawing-controls button:after {
-	background-color: #111;
-	-webkit-mask: url("./paw-outline.svg") no-repeat 50% 50%;
-}
+/* .actions button:after {
+  background-color: #111;
+  -webkit-mask: url("./paw-outline.svg") no-repeat 50% 50%;
+} */
 
-.drawing-controls button.black:before {
+.actions button.intake {
+  /* -webkit-mask: url("./actionIcons/intake.svg") no-repeat 50% 50%; */
+  background: url("./actionIcons/intake.svg") no-repeat 50% 50%;
+}
+/* .actions button.intake:after {
+  -webkit-mask: url("./actionIcons/intake.svg") no-repeat 50% 50%;
+  background: url("./actionIcons/intake.svg") no-repeat 50% 50%;
+} */
+.actions button.shoot {
+  background: url("./actionIcons/shoot.svg") no-repeat 50% 50%;
+  /* -webkit-mask: url("./actionIcons/shoot.svg") no-repeat 50% 50%; */
+}
+.actions button.piston_shoot {
+  background: url("./actionIcons/pistonShoot.svg") no-repeat 50% 50%;
+}
+.actions button.roller {
+  background: url("./actionIcons/roller.svg") no-repeat 50% 50%;
+}
+.actions button.expand {
+  background: url("./actionIcons/expand.svg") no-repeat 50% 50%;
+}
+/* .actions button.black:before {
 	background-color: #333;
-}
+} */
 
-.drawing-controls button.white:before {
+/* .actions button.white:before {
 	background-color: white;
-}
+} */
 
-.drawing-controls button.red:before {
+/* .actions button.red:before {
 	background-color: red;
-}
+} */
 
-.drawing-controls button.green:before {
+/* .actions button.green:before {
 	background-color: green;
-}
+} */
 
-.drawing-controls button.blue:before {
+/* .actions button.blue:before {
 	background-color: blue;
 } */

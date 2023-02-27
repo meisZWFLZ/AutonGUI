@@ -500,26 +500,32 @@ export class PawDrawEditorProvider
 		</head>
 		<body>
 		<div class="field">
-			<p class="robot"> </p>
+    <p class="robot"> </p>
+    <div class="index"></div>
 		</div>
+    <div class="actions">
+    	<button data-action="intake" class="intake" title="Intake"></button>
+    	<button data-action="shoot" class="shoot" title="Shoot"></button>
+    	<button data-action="piston_shoot" class="piston_shoot" title="Piston Shoot"></button>
+    	<button data-action="roller" class="roller" title="Roller"></button>
+    	<button data-action="expand" class="expand" title="Expand"></button>
+    </div>
+
 ${
   ""
   // <img class="robot"
   //  src="${robotPngUri}"
   //  alt="robot">
+  //<div class="drawing-canvas"></div>
+  // <div class="drawing-controls">
+  // 	<button data-color="black" class="black active" title="Black"></button>
+  // 	<button data-color="white" class="white" title="White"></button>
+  // 	<button data-color="red" class="red" title="Red"></button>
+  // 	<button data-color="green" class="green" title="Green"></button>
+  // 	<button data-color="blue" class="blue" title="Blue"></button>
+  // </div>
 }
-	${
-    ""
-    //<div class="drawing-canvas"></div>
-    // <div class="drawing-controls">
-    // 	<button data-color="black" class="black active" title="Black"></button>
-    // 	<button data-color="white" class="white" title="White"></button>
-    // 	<button data-color="red" class="red" title="Red"></button>
-    // 	<button data-color="green" class="green" title="Green"></button>
-    // 	<button data-color="blue" class="blue" title="Blue"></button>
-    // </div>
-  }
-				<script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+			<script type="module" nonce="${nonce}" src="${scriptUri}"></script>
 			</body>
 			</html>`;
   }
