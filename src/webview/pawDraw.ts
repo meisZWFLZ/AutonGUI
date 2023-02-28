@@ -110,6 +110,7 @@ class PawDrawEditor {
       // );
     } else throw "no robot";
 
+    field.addEventListener("contextmenu", (ev) => ev.preventDefault());
     // this.robotPos = { x: 0, y: 0, heading: 0 };
 
     // // they are the same, but in future, might be different to accommodate custom robot dimensions
@@ -370,6 +371,7 @@ class PawDrawEditor {
   _initElements(/** @type {HTMLElement} */ parent: HTMLElement) {
     // this.robot.addEventListener("mousedown", (ev) => {
     // this.robot.robotEl.addEventListener("mousedown", (ev) => {
+
     this.listManager._robot.robotEl.addEventListener("mousedown", (ev) => {
       // @ts-ignore
       if (!ev.altKey) {

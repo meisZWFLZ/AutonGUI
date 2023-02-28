@@ -92,10 +92,10 @@ z-index:100;
   /* background: none; */
   /* border: none; */
   transform: translateY(30%);
-  /* transition: transform 0.1s linear; */
+  transition: transform 0.1s linear;
   outline: none;
   opacity: 0.5;
-  margin: 1.5%;
+  margin: 0 1.5%;
 }
 
 /* .actions button:disabled {
@@ -105,9 +105,12 @@ z-index:100;
   opacity: 1;
 }
 /* .actions button.active:not(:disabled), */
-/* .actions button:hover:not(:disabled) {
-	transform: translateY(10%);
-} */
+.actions button:hover {
+  transform: translateY(5%) scale(1.15);
+}
+.actions button:active {
+  transform: scale(1.35);
+}
 
 .actions button:before,
 .actions button:after {

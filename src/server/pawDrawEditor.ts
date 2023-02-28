@@ -502,7 +502,6 @@ export class PawDrawEditorProvider
 		<div class="field">
     <p class="robot"> </p>
     <div class="index"></div>
-		</div>
     <div class="actions">
     	<button data-action="intake" class="intake" title="Intake"></button>
     	<button data-action="shoot" class="shoot" title="Shoot"></button>
@@ -510,6 +509,7 @@ export class PawDrawEditorProvider
     	<button data-action="roller" class="roller" title="Roller"></button>
     	<button data-action="expand" class="expand" title="Expand"></button>
     </div>
+		</div>
 
 ${
   ""
