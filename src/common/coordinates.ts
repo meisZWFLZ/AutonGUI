@@ -5,6 +5,10 @@ type Coordinate = {
 type Rotatable = {
   heading: number;
 };
+type HasMarginOfError = {
+  /** @member margin how far can the robot be from the target? in inches */
+  marginOfError: number;
+};
 
 type Position = Coordinate & Rotatable;
 /** responsible for retrieving the dimensions of elements required to convert coordinate systems */
@@ -218,6 +222,8 @@ class Physical extends ConvertibleCoordinate {
     return this;
   }
 }
+
+type ConvertiblePosition = ConvertibleCoordinate & Rotatable;
 // abstract class ConvertiblePosition
 //   extends ConvertibleCoordinate
 //   implements Rotatable
@@ -235,7 +241,7 @@ class Physical extends ConvertibleCoordinate {
 // class RelativePos extends Relative implements ConvertiblePosition {
 //   public heading!: number;
 // }
-class RelativePos extends Relative implements Rotatable {
+class RelativePos extends Relative implements ConvertiblePosition {
   public heading: number;
   constructor(
     pos: { x: number; y: number; heading: number },
@@ -249,7 +255,7 @@ class RelativePos extends Relative implements Rotatable {
 // class AbsolutePos extends Absolute implements ConvertiblePosition {
 //   public heading!: number;
 // }
-class AbsolutePos extends Absolute implements Rotatable {
+class AbsolutePos extends Absolute implements ConvertiblePosition {
   public heading: number;
   constructor(
     pos: { x: number; y: number; heading: number },
@@ -262,7 +268,7 @@ class AbsolutePos extends Absolute implements Rotatable {
 // class PhysicalPos extends Physical implements ConvertiblePosition {
 //   public heading!: number;
 // }
-class PhysicalPos extends Physical implements Rotatable {
+class PhysicalPos extends Physical implements ConvertiblePosition {
   public heading: number;
   constructor(
     pos: { x: number; y: number; heading: number },
@@ -270,6 +276,21 @@ class PhysicalPos extends Physical implements Rotatable {
   ) {
     super(pos, dimProvider);
     this.heading = pos.heading;
+  }
+}
+
+class CoordinateUtilities {
+  static distance(
+    { x: x1, y: y1 }: Coordinate,
+    { x: x2, y: y2 }: Coordinate
+  ): number {
+    return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
+  }
+  static hasMarginOfError(obj: any): obj is HasMarginOfError {
+    return "marginOfError" in obj;
+  }
+  static isCoordinate(obj: any): obj is Coordinate {
+    return "x" in obj && "y" in obj;
   }
 }
 // export default {
@@ -297,4 +318,7 @@ export {
   PhysicalPos,
   DimensionProvider,
   Rotatable,
+  HasMarginOfError,
+  ConvertiblePosition,
+  CoordinateUtilities,
 };
