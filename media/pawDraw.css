@@ -85,6 +85,9 @@ z-index:100;
   width: 100%;
   display: flex;
   justify-content: center;
+  pointer-events: none;
+
+  z-index: 30;
 }
 .index {
   position: relative;
@@ -110,6 +113,12 @@ z-index:100;
   outline: none;
   opacity: 0.5;
   margin: 0 1.5%;
+  
+  pointer-events:all;
+}
+
+.actions button.hidden {
+  transform: translateY(70%);
 }
 
 /* .actions button:disabled {

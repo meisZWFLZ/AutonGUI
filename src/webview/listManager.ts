@@ -227,7 +227,7 @@ export default class ListManager {
   protected updateActions() {
     this._actionsManager.setActions(this.getCurActions());
   }
-  protected updateManagers() {
+  public updateManagers() {
     this.updateActions();
     this.updateRobotPos();
     this.updateError();

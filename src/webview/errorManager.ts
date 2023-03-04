@@ -16,9 +16,6 @@ export type Circle = Coordinate & {
 
 /** circle that will update graphically whenever modified (all measurements in px)*/
 export class DrawableCircle implements Circle {
-  protected width: number;
-  protected height: number;
-
   /**
    * @param width width of canvas
    * @param height height of canvas
@@ -28,25 +25,34 @@ export class DrawableCircle implements Circle {
     private _center: Coordinate,
     private _radius: number,
     protected context: CanvasRenderingContext2D,
-    { width, height }: { width: number; height: number },
-    protected opts: { clear: boolean; circumferenceWidth: number } = {
+    protected canvasDims: { get width(): number; get height(): number },
+    protected opts: {
+      clear: boolean;
+      circumferenceWidth: number;
+      strokeStyle: typeof context.strokeStyle;
+    } = {
       clear: true,
       circumferenceWidth: 10,
+      strokeStyle: "red",
     }
   ) {
-    this.width = width;
-    this.height = height;
-    this.context.strokeStyle = "red";
     this.draw();
   }
 
   public draw() {
-    if (this.opts.clear) this.context.clearRect(0, 0, this.width, this.height);
+    if (this.opts.clear)
+      this.context.clearRect(
+        0,
+        0,
+        this.canvasDims.width,
+        this.canvasDims.height
+      );
+    this.context.strokeStyle = this.opts.strokeStyle;
     this.context.beginPath();
     this.context.lineWidth = this.opts.circumferenceWidth; // make circle thicker
     this.context.arc(
       this._center.x,
-      this._center.y + this.height,
+      this._center.y + this.canvasDims.height,
       // 100,
       // 100,
       this._radius,
@@ -144,7 +150,7 @@ export default class ErrorManager implements HasMarginOfError {
       this.lenConverter.inches.toPX(robotCoord.marginOfError),
       this.context,
       this.canvas,
-      { circumferenceWidth: 5, clear: true }
+      { circumferenceWidth: 5, clear: true, strokeStyle: "red" }
     );
 
     this.registerEventListeners(canvas);
