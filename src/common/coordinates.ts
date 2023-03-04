@@ -82,7 +82,7 @@ class Relative extends ConvertibleCoordinate {
       {
         ...this,
         x: this.x + fieldCoord.x,
-        y: this._dimProvider.fieldWidth + fieldCoord.y - this.y,
+        y: this._dimProvider.fieldWidth + fieldCoord.y + this.y,
       },
       this._dimProvider
     );
@@ -120,7 +120,7 @@ class Relative extends ConvertibleCoordinate {
       {
         ...coord,
         x: coord.x - halfRobotWidth,
-        y: coord.y - halfRobotWidth,
+        y: coord.y + halfRobotWidth,
       },
       dimProvider
     );
@@ -130,7 +130,7 @@ class Relative extends ConvertibleCoordinate {
     const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
     return {
       x: this.x + halfRobotWidth,
-      y: this.y + halfRobotWidth,
+      y: this.y - halfRobotWidth,
     };
   }
 }
@@ -179,7 +179,7 @@ class Absolute extends ConvertibleCoordinate {
       dimProvider
     );
   }
-  /** untested */
+
   public getCenter(): Coordinate {
     const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
     // console.log(this)

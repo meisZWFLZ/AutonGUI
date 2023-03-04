@@ -1,6 +1,6 @@
 html,
 body {
-  height: 100%;
+  height: 99%;
 }
 
 /* .drawing-canvas {
@@ -24,12 +24,26 @@ body {
   justify-content: left;
   align-items: end;
 
-  background-image: url("./SpinUpField.svg");
+  background: url("./SpinUpField.svg") no-repeat;
+  background-size: cover;
   /*   background-repeat: no-repeat;
   background-position: center;
   background-size: contain; */
 
   user-select: none;
+}
+
+.canvas_wrapper {
+  height: 0%;
+  width: 0%;
+  overflow: visible;
+}
+
+.mycanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 20;
 }
 
 /* .field:after {
@@ -48,7 +62,7 @@ body {
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
-  z-index: 100;
+  z-index: 10;
 }
 /* .robot:after {
   content: "";

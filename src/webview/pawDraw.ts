@@ -2,13 +2,11 @@
 
 import {
   AbsoluteCoord,
-  ConvertibleCoordinate,
-  Coordinate,
+  CoordinateUtilities,
   DimensionProvider,
+  HasMarginOfError,
   PhysicalCoord,
-  PhysicalPos,
   Position,
-  Rotatable,
 } from "../common/coordinates.js";
 import Message from "../common/message.js";
 import NodeList from "./nodeList.js";
@@ -30,10 +28,6 @@ class JSONConversions {
   }
   static fromJSON = this.toUint8Array;
   static fromUint8Array = this.toJSON;
-}
-class MyNodeClass implements MyNode {
-  position: Position = { x: 0, y: 0, heading: 0 };
-  actions?: ACTION[] | undefined;
 }
 
 // /**
@@ -65,14 +59,23 @@ class PawDrawEditor {
   startList: NodeList | undefined;
   listManager: ListManager;
   indexEl: HTMLElement;
+  readonly field: HTMLElement;
+  readonly canvas: HTMLCanvasElement;
 
-  constructor(/** @type {HTMLElement} */ parent: HTMLElement) {
+  constructor() {
     this.ready = false;
 
     this.editable = false;
 
-    const field = document.querySelector(".field");
-    if (!field) throw "no field";
+    const _field: HTMLElement | null = document.querySelector(".field");
+    if (!_field) throw "no field";
+    this.field = _field;
+    const _canvas: HTMLCanvasElement | null =
+      document.querySelector(".mycanvas");
+    if (!_canvas) throw "no canvas";
+    this.canvas = _canvas;
+
+    this.setCanvasSizing();
 
     const _indexEl: HTMLElement | null = document.querySelector(".index");
     if (!_indexEl) throw "no index element";
@@ -89,18 +92,16 @@ class PawDrawEditor {
           return robotEl.offsetWidth;
         }
         get fieldWidth() {
-          return field.getBoundingClientRect().width;
+          return _field.getBoundingClientRect().width;
         }
         get fieldCoord() {
-          return field.getBoundingClientRect();
+          return _field.getBoundingClientRect();
         }
       })();
       this.listManager = new ListManager(
-        robotEl,
-        actionsContainer,
+        { robot: robotEl, actions: actionsContainer, _field, canvas: _canvas },
         new NodeList(),
         0,
-        this.dimProvider,
         this.postLastEdit.bind(this),
         this.setIndex.bind(this)
       );
@@ -110,7 +111,7 @@ class PawDrawEditor {
       // );
     } else throw "no robot";
 
-    field.addEventListener("contextmenu", (ev) => ev.preventDefault());
+    _field.addEventListener("contextmenu", (ev) => ev.preventDefault());
     // this.robotPos = { x: 0, y: 0, heading: 0 };
 
     // // they are the same, but in future, might be different to accommodate custom robot dimensions
@@ -127,11 +128,22 @@ class PawDrawEditor {
     // this.currentStroke = undefined;
 
     this.setIndex(0);
-    this._initElements(parent);
+    this._initElements();
   }
 
   setIndex(index: number) {
     this.indexEl.textContent = index.toString();
+  }
+
+  setCanvasSizing() {
+    const fieldRect = this.field.getBoundingClientRect();
+    this.canvas.width = fieldRect.width;
+    this.canvas.height = fieldRect.height;
+
+    this.canvas.style.height = `${fieldRect.height}px`;
+    this.canvas.style.width = `${fieldRect.width}px`;
+    this.canvas.style.top = `${fieldRect.top}px`;
+    this.canvas.style.left = `${fieldRect.left}px`;
   }
 
   // addPoint(/** @type {number} */ x, /** @type {number} */ y) {
@@ -368,7 +380,7 @@ class PawDrawEditor {
     // vscode.postMessage(new Message.ToExtension.Edit())
   }
 
-  _initElements(/** @type {HTMLElement} */ parent: HTMLElement) {
+  _initElements() {
     // this.robot.addEventListener("mousedown", (ev) => {
     // this.robot.robotEl.addEventListener("mousedown", (ev) => {
 
@@ -450,6 +462,7 @@ class PawDrawEditor {
       // this.setRobotPosition({}, { check: false });
       // this.robot.resetPos();
       this.listManager._robot.resetPos();
+      this.setCanvasSizing()
       // console.log("resize");
     });
 
@@ -495,7 +508,6 @@ class PawDrawEditor {
             return;
           case "n":
             this.listManager.insertNewNodeAfterCur();
-            this.postLastEdit();
             return;
           case "j":
             this.listManager.goToPrevious();
@@ -511,6 +523,7 @@ class PawDrawEditor {
       switch (ev.key.toLowerCase()) {
         case "delete":
           this.listManager.removeCurNode();
+          break;
         case "r":
         case "arrowup":
         case "w":
@@ -657,7 +670,12 @@ class PawDrawEditor {
       nodeArr = JSONConversions.fromUint8Array(content);
       if (!(nodeArr instanceof Array))
         throw new Error("not instance of Node[]");
-      if (!(nodeArr[0] instanceof MyNodeClass))
+      if (
+        !(
+          CoordinateUtilities.isCoordinate(nodeArr[0]) &&
+          CoordinateUtilities.hasMarginOfError(nodeArr[0])
+        )
+      )
         throw new Error("not instance of Node[]");
     } catch {}
     return this.listManager.update({
@@ -695,7 +713,7 @@ class PawDrawEditor {
             break;
           }
         }
-        return e as ListAction<MyNode>;
+        return e;
       }) /*  as unknown as ListAction<MyNode>[] */,
     });
   }
@@ -737,10 +755,7 @@ class PawDrawEditor {
   }
 }
 
-export const editor = new PawDrawEditor(
-  // @ts-ignore
-  document.querySelector(".drawing-canvas")
-);
+export const editor = new PawDrawEditor();
 
 // Handle messages from the extension
 window.addEventListener("message", async ({ data: msg }: { data: Message }) => {
