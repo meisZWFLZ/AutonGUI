@@ -1,21 +1,43 @@
 import EventList, { ListAction } from "./eventList.js";
 // import Message from "../common/message.js";
-import { Node } from "../common/node.js";
+import { Node as MyNode } from "../common/node.js";
+import { HasMarginOfError, Position } from "../common/coordinates";
 
-export default class NodeList extends EventList<Node> {
-  private startList: Node[];
-  public constructor(arr: Node[] = []) {
+export default class NodeList extends EventList<MyNode> {
+  private startList: MyNode[];
+  public constructor(arr: MyNode[] = []) {
     super(arr);
     this.startList = structuredClone(arr);
   }
 
-  public toJSON(): Node[] {
+  public toJSON(): MyNode[] {
     // console.log(this)
 
-    return super.get({ all: true });
+    return super.get({ all: true }).map((node: MyNode) => {
+      return {
+        position: Object.fromEntries(
+          Object.entries(node.position).sort(([k1], [k2]) => {
+            function getVal(key: string): number {
+              switch (key as "x" | "y" | "heading" | "marginOfError") {
+                case "x":
+                  return 4;
+                case "y":
+                  return 3;
+                case "heading":
+                  return 2;
+                case "marginOfError":
+                  return 1;
+              }
+            }
+            return getVal(k2) - getVal(k1);
+          })
+        ) as Position & HasMarginOfError,
+        actions: node.actions,
+      };
+    });
   }
 
-  public update(content?: Node[], edits?: ListAction<Node>[]) {
+  public update(content?: MyNode[], edits?: ListAction<MyNode>[]) {
     // console.log("edits", edits, "arr", this.startList);
     if (content) {
       this.setList(content);

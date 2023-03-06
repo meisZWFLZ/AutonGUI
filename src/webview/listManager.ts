@@ -181,7 +181,7 @@ export default class ListManager {
   /** checks if index is in bounds, if not, it will return it in bounds using modulo*/
   public _fixIndexWrap(index: number = this.index): number {
     return (index =
-      (index < 0 ? this.list.length - 1 : 0) + (index % this.list.length));
+      (index < 0 ? this.list.length : 0) + (index % this.list.length));
   }
   /** checks if index is in bounds, if not, it will return it in bounds by shifting the number in bounds*/
   public _fixIndexShift(index: number = this.index): number {
@@ -252,7 +252,18 @@ export default class ListManager {
     this.appendNode(this.newNode);
   }
   public insertNewNodeAfterCur() {
-    this.insertAfterCurNode(this.newNode);
+    this.insertAfterCurNode(
+      structuredClone({
+        actions: this.newNode.actions,
+        position: {
+          ...this.getCurNode().position,
+          marginOfError:
+            this.getCurError() < 1
+              ? this.newNode.position.marginOfError
+              : this.getCurError(),
+        },
+      })
+    );
   }
   public get index(): number {
     return this._index;

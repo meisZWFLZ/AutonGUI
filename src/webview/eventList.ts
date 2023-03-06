@@ -1,4 +1,3 @@
-import { EventEmitter } from "events";
 export enum LIST_ACTION_TYPE {
   APPEND,
   INSERT,
