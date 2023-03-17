@@ -311,8 +311,8 @@ class PawDrawEditor {
             // return this.setRobotPosition({
             return this.listManager.moveRobotTo({
               ...currRobotPos,
-              x: currRobotPos.x + 3 * dir.x,
-              y: currRobotPos.y + 3 * dir.y,
+              x: currRobotPos.x + 1 * dir.x,
+              y: currRobotPos.y + 1 * dir.y,
             });
           case "c":
             try {

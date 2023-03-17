@@ -20,24 +20,24 @@ import { Node } from "../common/node";
 // }
 type Edit = ListAction<Node>;
 
-interface PawDrawDocumentDelegate {
+interface WaffltonDocumentDelegate {
   getFileData(): Promise<Uint8Array>;
 }
 
 /**
  * Define the document (the data model) used for paw draw files.
  */
-class PawDrawDocument extends Disposable implements vscode.CustomDocument {
+class WaffltonDocument extends Disposable implements vscode.CustomDocument {
   static async create(
     uri: vscode.Uri,
     backupId: string | undefined,
-    delegate: PawDrawDocumentDelegate
-  ): Promise<PawDrawDocument | PromiseLike<PawDrawDocument>> {
+    delegate: WaffltonDocumentDelegate
+  ): Promise<WaffltonDocument | PromiseLike<WaffltonDocument>> {
     // If we have a backup, read that. Otherwise read the resource from the workspace
     const dataFile =
       typeof backupId === "string" ? vscode.Uri.parse(backupId) : uri;
-    const fileData = await PawDrawDocument.readFile(dataFile);
-    return new PawDrawDocument(uri, fileData, delegate);
+    const fileData = await WaffltonDocument.readFile(dataFile);
+    return new WaffltonDocument(uri, fileData, delegate);
   }
 
   private static async readFile(uri: vscode.Uri): Promise<Uint8Array> {
@@ -53,12 +53,12 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
   private _edits: Array<Edit> = [];
   private _savedEdits: Array<Edit> = [];
 
-  private readonly _delegate: PawDrawDocumentDelegate;
+  private readonly _delegate: WaffltonDocumentDelegate;
 
   private constructor(
     uri: vscode.Uri,
     initialContent: Uint8Array,
-    delegate: PawDrawDocumentDelegate
+    delegate: WaffltonDocumentDelegate
   ) {
     super();
     this._uri = uri;
@@ -168,7 +168,7 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
    * Called by VS Code when the user calls `revert` on a document.
    */
   async revert(_cancellation: vscode.CancellationToken): Promise<void> {
-    const diskContent = await PawDrawDocument.readFile(this.uri);
+    const diskContent = await WaffltonDocument.readFile(this.uri);
     this._documentData = diskContent;
     this._edits = this._savedEdits;
     this._onDidChangeDocument.fire({
@@ -216,13 +216,13 @@ class PawDrawDocument extends Disposable implements vscode.CustomDocument {
  * - Implementing save, undo, redo, and revert.
  * - Backing up a custom editor.
  */
-export class PawDrawEditorProvider
-  implements vscode.CustomEditorProvider<PawDrawDocument>
+export class WaffltonEditorProvider
+  implements vscode.CustomEditorProvider<WaffltonDocument>
 {
   private static newPawDrawFileId = 1;
 
   public static register(context: vscode.ExtensionContext): vscode.Disposable {
-    vscode.commands.registerCommand("catCustoms.pawDraw.new", () => {
+    vscode.commands.registerCommand("wafflton.builder.new", () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
         vscode.window.showErrorMessage(
@@ -233,19 +233,19 @@ export class PawDrawEditorProvider
 
       const uri = vscode.Uri.joinPath(
         workspaceFolders[0].uri,
-        `new-${PawDrawEditorProvider.newPawDrawFileId++}.pawdraw`
+        `new-${WaffltonEditorProvider.newPawDrawFileId++}.wton.cpp`
       ).with({ scheme: "untitled" });
 
       vscode.commands.executeCommand(
         "vscode.openWith",
         uri,
-        PawDrawEditorProvider.viewType
+        WaffltonEditorProvider.viewType
       );
     });
 
     return vscode.window.registerCustomEditorProvider(
-      PawDrawEditorProvider.viewType,
-      new PawDrawEditorProvider(context),
+      WaffltonEditorProvider.viewType,
+      new WaffltonEditorProvider(context),
       {
         // For this demo extension, we enable `retainContextWhenHidden` which keeps the
         // webview alive even when it is not visible. You should avoid using this setting
@@ -258,7 +258,7 @@ export class PawDrawEditorProvider
     );
   }
 
-  private static readonly viewType = "catCustoms.pawDraw";
+  private static readonly viewType = "wafflton.builder";
 
   /**
    * Tracks all known webviews
@@ -273,8 +273,8 @@ export class PawDrawEditorProvider
     uri: vscode.Uri,
     openContext: { backupId?: string },
     _token: vscode.CancellationToken
-  ): Promise<PawDrawDocument> {
-    const document: PawDrawDocument = await PawDrawDocument.create(
+  ): Promise<WaffltonDocument> {
+    const document: WaffltonDocument = await WaffltonDocument.create(
       uri,
       openContext.backupId,
       {
@@ -344,7 +344,7 @@ export class PawDrawEditorProvider
   }
 
   async resolveCustomEditor(
-    document: PawDrawDocument,
+    document: WaffltonDocument,
     webviewPanel: vscode.WebviewPanel,
     _token: vscode.CancellationToken
   ): Promise<void> {
@@ -408,20 +408,20 @@ export class PawDrawEditorProvider
   }
 
   private readonly _onDidChangeCustomDocument = new vscode.EventEmitter<
-    vscode.CustomDocumentEditEvent<PawDrawDocument>
+    vscode.CustomDocumentEditEvent<WaffltonDocument>
   >();
   public readonly onDidChangeCustomDocument =
     this._onDidChangeCustomDocument.event;
 
   public saveCustomDocument(
-    document: PawDrawDocument,
+    document: WaffltonDocument,
     cancellation: vscode.CancellationToken
   ): Thenable<void> {
     return document.save(cancellation);
   }
 
   public saveCustomDocumentAs(
-    document: PawDrawDocument,
+    document: WaffltonDocument,
     destination: vscode.Uri,
     cancellation: vscode.CancellationToken
   ): Thenable<void> {
@@ -429,14 +429,14 @@ export class PawDrawEditorProvider
   }
 
   public revertCustomDocument(
-    document: PawDrawDocument,
+    document: WaffltonDocument,
     cancellation: vscode.CancellationToken
   ): Thenable<void> {
     return document.revert(cancellation);
   }
 
   public backupCustomDocument(
-    document: PawDrawDocument,
+    document: WaffltonDocument,
     context: vscode.CustomDocumentBackupContext,
     cancellation: vscode.CancellationToken
   ): Thenable<vscode.CustomDocumentBackup> {
@@ -456,7 +456,7 @@ export class PawDrawEditorProvider
         "out",
         "webview",
         "webview",
-        "pawDraw.js"
+        "wflAuton.js"
       )
     );
 
@@ -469,7 +469,7 @@ export class PawDrawEditorProvider
     );
 
     const styleMainUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._context.extensionUri, "media", "pawDraw.css")
+      vscode.Uri.joinPath(this._context.extensionUri, "media", "wflAuton.css")
     );
 
     // const robotPngUri = webview.asWebviewUri(vscode.Uri.joinPath(
@@ -552,7 +552,7 @@ ${
     panel.webview.postMessage(/* { type, body } */ msg);
   }
 
-  private onMessage(document: PawDrawDocument, msg: Message) {
+  private onMessage(document: WaffltonDocument, msg: Message) {
     // console.log(msg);
     if (!Message.ToExtension.test(msg)) return;
     if (Message.ToExtension.Edit.test(msg)) document.makeEdit(msg.edit);

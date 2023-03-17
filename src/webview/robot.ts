@@ -173,6 +173,6 @@ export class Robot {
     this.#pos = pos;
     // could be changed for custom robot length
     // this.#lengthIRL = 18;
-    this.#radiusIRL = 18 / 2; // half or length
+    this.#radiusIRL = 16.25 / 2; // half or length
   }
 }
