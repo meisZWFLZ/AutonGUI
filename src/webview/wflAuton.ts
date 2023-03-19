@@ -558,7 +558,7 @@ window.addEventListener("message", async ({ data: msg }: { data: Message }) => {
     if (Message.ToWebview.Initialize.Existing.test(msg))
       // editor.listManager.list.update(processUint8Array(msg.content));
       editor.update(msg);
-  } else if (Message.ToWebview.Update.test(msg))
+  } else if (Message.ToWebview.Edit.test(msg))
     // update
     // editor.listManager.list.update(processUint8Array(msg.content), msg.edits);
     editor.update(msg);

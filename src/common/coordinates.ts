@@ -3,6 +3,7 @@ type Coordinate = {
   y: number;
 };
 type Rotatable = {
+  /** degrees */
   heading: number;
 };
 type HasMarginOfError = {
@@ -287,10 +288,21 @@ class CoordinateUtilities {
     return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
   }
   static hasMarginOfError(obj: any): obj is HasMarginOfError {
-    return "marginOfError" in obj;
+    return "marginOfError" in obj && typeof obj.marginOfError == "number";
   }
   static isCoordinate(obj: any): obj is Coordinate {
-    return "x" in obj && "y" in obj;
+    return (
+      "x" in obj &&
+      "y" in obj &&
+      typeof obj.x == "number" &&
+      typeof obj.y == "number"
+    );
+  }
+  static isRotatable(obj: any): obj is Rotatable {
+    return "heading" in obj && typeof obj.heading == "number";
+  }
+  static isPosition(obj: any): obj is Position {
+    return this.isCoordinate(obj) && this.isRotatable(obj);
   }
 }
 // export default {

@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 // import { CatScratchEditorProvider } from './catScratchEditor';
-import { WaffltonEditorProvider } from "./wflAutonEditor";
+import { AutonEditorProvider } from "./autonEditor";
 
 export function activate(context: vscode.ExtensionContext) {
   // Register our custom editor providers
@@ -24,52 +24,50 @@ export function activate(context: vscode.ExtensionContext) {
       .map(
         (dir) => dir.replace("\\", "/").replace(/(^\.?\/)|(\/$)/g, "") + "/**"
       )
-      .flatMap(
-        (dir: string): vscode.DocumentFilter[] =>
-          ["cpp", "c"].flatMap((language) => {
-						/**
-						 * 
-						 * @returns 
-						 */
-            function getLastPathSection(uri: vscode.Uri): string {
-              return uri.path.split("/").at(-1) as string;
-            }
-            let workspaceFolders: Readonly<vscode.WorkspaceFolder[]> =
-              vscode.workspace.workspaceFolders ?? [];
+      .flatMap((dir: string): vscode.DocumentFilter[] =>
+        ["cpp", "c"].flatMap((language) => {
+          /**
+           *
+           * @returns
+           */
+          function getLastPathSection(uri: vscode.Uri): string {
+            return uri.path.split("/").at(-1) as string;
+          }
+          let workspaceFolders: Readonly<vscode.WorkspaceFolder[]> =
+            vscode.workspace.workspaceFolders ?? [];
 
-            //
-            let workspaceFolder: vscode.WorkspaceFolder | undefined =
-              workspaceFolders.find((folder) =>
-                dir.startsWith(getLastPathSection(folder.uri))
-              );
-            let patterns: vscode.RelativePattern[];
-            if (workspaceFolder) {
-              workspaceFolders = [workspaceFolder];
-              dir = dir.substring(
-                getLastPathSection(workspaceFolder.uri).length + 1
-              );
-            }
-            patterns = workspaceFolders.map(
-              (folder) => new vscode.RelativePattern(folder, dir)
+          //
+          let workspaceFolder: vscode.WorkspaceFolder | undefined =
+            workspaceFolders.find((folder) =>
+              dir.startsWith(getLastPathSection(folder.uri))
             );
-            console.log({
-              // workspaceUri,
-              workspaceFolders,
-              // pattern,
+          let patterns: vscode.RelativePattern[];
+          if (workspaceFolder) {
+            workspaceFolders = [workspaceFolder];
+            dir = dir.substring(
+              getLastPathSection(workspaceFolder.uri).length + 1
+            );
+          }
+          patterns = workspaceFolders.map(
+            (folder) => new vscode.RelativePattern(folder, dir)
+          );
+          console.log({
+            // workspaceUri,
+            workspaceFolders,
+            // pattern,
 
-              dir,
-              // workspaceState,
-              // keys: workspaceState?.keys(),
-            });
-            return patterns?.map((pattern) => {
-              return {
-                pattern,
-                language,
-                scheme: "file",
-              };
-            });
-          })
-
+            dir,
+            // workspaceState,
+            // keys: workspaceState?.keys(),
+          });
+          return patterns?.map((pattern) => {
+            return {
+              pattern,
+              language,
+              scheme: "file",
+            };
+          });
+        })
       );
   function inAutonDirectory(
     document: vscode.TextDocument | undefined
@@ -129,6 +127,7 @@ export function activate(context: vscode.ExtensionContext) {
       (event: vscode.TextDocumentChangeEvent) => {
         // if (isCpp(event.document)) console.log("enable");
         // else console.log("disable");
+        event.contentChanges;
         inAutonDirectory(event.document);
         console.log("onDidChangeTextDocument" /* event */);
       }
@@ -145,6 +144,8 @@ export function activate(context: vscode.ExtensionContext) {
       }
     )
   );
+
+  vscode.workspace.onDidChangeTextDocument;
 
   // context.subscriptions.push(
   //   vscode.window.registerWebviewPanelSerializer('svgPreview', previewPanel)
