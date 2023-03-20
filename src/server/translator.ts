@@ -1,16 +1,29 @@
 import { Action, ActionTypeGuards, SetPose } from "../common/action";
 import Auton from "../common/auton";
+import * as vscode from "vscode";
 
 /** responsible for translating cpp text into an auton */
 export namespace Translation {
+  /** describes an action and its associated range in the text document */
+  type CppAction = Action & { readonly range: vscode.Range };
   export class CppToAuton {
     /**
-     * @note if pattern matching is exceedingly slow, then the "[\s\n]*"'s may be the culprit
+     * @note if pattern matching is exceedingly slow, then the {@link CppToAuton.PATTERNS.COMPILER_IGNORES COMPILER_IGNORES's} may be the culprit
+     * @todo modify to not recognize commented actions
      */
     static readonly PATTERNS = class Patterns {
       static FLOAT: RegExp = /(?:\d*\.)?\d+/;
       static BOOLEAN: RegExp = /true|false|0|1/;
       static STRING: RegExp = /".*"/;
+      static LINE_COMMENT: RegExp = /\/\/.*/;
+
+      static BLOCK_COMMENT: RegExp = /\/\*[\w\W]*?\*\//;
+      /* matches spaces and newlines */
+      static SPACE_AND_LINE: RegExp = /[\s\n]*/;
+      /** matches text that is ignored by the compiler */
+      static COMPILER_IGNORES: RegExp = new RegExp(
+        `${this.LINE_COMMENT.source}|${this.BLOCK_COMMENT.source}|${this.SPACE_AND_LINE.source}`
+      );
       /**
        * @param {string} n name of capturing group
        * @returns a string that matches a param with type float with a named capturing group
@@ -39,9 +52,15 @@ export namespace Translation {
       protected static string(n: string): string {
         return `(?<${n}>${Patterns.STRING.source})`;
       }
-      /** @returns separator surrounded by "[\s\n]*"'s */
+      /**
+       * @returns separator surrounded by "[\s\n]*"'s
+       */
       protected static s(separator: string): string {
-        return `[\\s\\n]*${separator}[\\s\\n]*`;
+        return (
+          this.COMPILER_IGNORES.source +
+          separator +
+          this.COMPILER_IGNORES.source
+        );
       }
       /**
        * @param content will be the content of the capturing group
@@ -149,7 +168,8 @@ export namespace Translation {
         { name: "expand", regex: this.EXPAND },
       ];
     };
-    static translate(cpp: string): Auton {
+    static translate(doc: vscode.TextDocument): Auton {
+      const cpp = doc.getText();
       const actionArr = this.PATTERNS.PATTERNS.flatMap((pattern) =>
         Array.from(cpp.matchAll(pattern.regex)).map((match) => {
           return { action: pattern.name, match };
@@ -157,19 +177,28 @@ export namespace Translation {
       )
         .sort((a, b) => (a.match.index ?? 0) - (b.match.index ?? 0))
         .map(({ action, match }) => {
-          return { type: action, ...match.groups };
+          const index: number = match.index ?? 0;
+          return {
+            type: action,
+            ...match.groups,
+            range: new vscode.Range(
+              doc.positionAt(index),
+              doc.positionAt(index + match[0].length)
+            ),
+          };
         })
-        .filter((e): e is Action => ActionTypeGuards.isAction(e));
+        .filter((e): e is CppAction => ActionTypeGuards.isAction(e));
 
       // should just warn user
       actionArr.splice(
         0,
-        actionArr.findIndex((act): act is SetPose =>
+        actionArr.findIndex((act): act is CppAction & SetPose =>
           ActionTypeGuards.isSetPose(act)
         )
       );
-      return new Auton(
-        (actionArr[0] as SetPose | undefined)?.params,
+
+      return new Auton<CppAction>(
+        actionArr[0] as SetPose & CppAction,
         actionArr.slice(0, 1)
       );
     }

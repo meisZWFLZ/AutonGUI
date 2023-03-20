@@ -13,39 +13,39 @@ import {
   ActionTypeGuards,
 } from "./action.js";
 
-export type AutonData = [SetPose, ...Action[]];
+export type AutonData<A extends Action = Action> = [SetPose & A, ...A[]];
 
-export default class Auton {
-  private _auton: AutonData;
+export default class Auton<A extends Action = Action> {
+  protected _auton: AutonData<A>;
 
-  constructor(
-    startPos: Position = { x: 0, y: 0, heading: 0 },
-    actions: Action[] = []
-  ) {
-    this._auton = [Auton.createSetPose(startPos), ...actions];
+  constructor(startPos: SetPose & A, actions: A[] = []) {
+    this._auton = [startPos, ...actions];
   }
 
-  public get auton(): AutonData {
+  public get auton(): AutonData<A> {
     return this._auton;
   }
-  public set auton(auton: AutonData) {
+  public set auton(auton: AutonData<A>) {
     this._auton = auton;
   }
   public setStartPos(startPos: Position) {
-    this.auton[0] = Auton.createSetPose(startPos);
+    this.auton[0] = {
+      ...this.auton[0],
+      params: { ...this.auton[0].params, ...startPos },
+    };
   }
   public getStartPos(): Position {
     return this.auton[0].params;
   }
-  public append({ action: _act }: AutonEdit.Append) {
-    const acts: Action[] = Array.isArray(_act) ? _act : [_act];
+  public append({ action: _act }: AutonEdit.Append<A>) {
+    const acts: A[] = Array.isArray(_act) ? _act : [_act];
     this._auton.push(...acts);
   }
   /**
    * @throws will throw if inserting action not of type {@link SetPose} into the 0th index
    */
-  public insert({ action: _act, index }: AutonEdit.Insert) {
-    const acts: Action[] = Array.isArray(_act) ? _act : [_act];
+  public insert({ action: _act, index }: AutonEdit.Insert<A>) {
+    const acts: A[] = Array.isArray(_act) ? _act : [_act];
     if (
       index === 0 &&
       !(
@@ -59,8 +59,8 @@ export default class Auton {
   /**
    * @throws will throw if replacing 0th index with an action not of type {@link SetPose}
    */
-  public replace({ action: _act, index, count }: AutonEdit.Replace) {
-    const acts: Action[] = Array.isArray(_act) ? _act : [_act];
+  public replace({ action: _act, index, count }: AutonEdit.Replace<A>) {
+    const acts: A[] = Array.isArray(_act) ? _act : [_act];
     if (
       index === 0 &&
       !(
@@ -84,8 +84,10 @@ export default class Auton {
    * @throws will throw if replacing 0th index with an action not of type {@link SetPose}
    * @throws will throw if removing 0th element
    */
-  public makeEdit(_edit: AutonEdit.AutonEdit | AutonEdit.AutonEdit[]) {
-    const edits: AutonEdit.AutonEdit[] = Array.isArray(_edit) ? _edit : [_edit];
+  public makeEdit(_edit: AutonEdit.AutonEdit<A> | AutonEdit.AutonEdit<A>[]) {
+    const edits: AutonEdit.AutonEdit<A>[] = Array.isArray(_edit)
+      ? _edit
+      : [_edit];
     edits.forEach((edit) => {
       switch (edit.type) {
         case "append":
@@ -142,24 +144,24 @@ export namespace AutonEdit {
   export interface Base {
     readonly type: "append" | "insert" | "replace" | "remove";
   }
-  export interface Append extends Base {
+  export interface Append<A extends Action> extends Base {
     readonly type: "append";
-    readonly action: Action | Action[];
+    readonly action: A | A[];
   }
   /**
    * @warn if index is zero, oth element of action must be {@link SetPose}
    */
-  export interface Insert extends Base {
+  export interface Insert<A extends Action> extends Base {
     readonly type: "insert";
-    readonly action: Action | Action[];
+    readonly action: A | A[];
     readonly index: number;
   }
   /**
    * @warn if index is zero, 0th element of action must be {@link SetPose}
    */
-  export interface Replace extends Base {
+  export interface Replace<A extends Action> extends Base {
     readonly type: "replace";
-    readonly action: Action | Action[];
+    readonly action: A | A[];
     readonly index: number;
     /**
      * @description specifies the number of elements of the original array to replace with the new elements (0 acts like insert)
@@ -175,5 +177,9 @@ export namespace AutonEdit {
     readonly index: number;
     readonly count?: number;
   }
-  export type AutonEdit = Append | Insert | Replace | Remove;
+  export type AutonEdit<A extends Action = Action> =
+    | Append<A>
+    | Insert<A>
+    | Replace<A>
+    | Remove;
 }

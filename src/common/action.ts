@@ -98,73 +98,73 @@ export const ActionTypeGuards = {
     return ["params", "type"].every((e) => e in obj);
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isWait(obj: unknown): obj is Wait {
     return this.isBaseAction(obj) && obj.type == "wait";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isStopIntake(obj: unknown): obj is StopIntake {
     return this.isBaseAction(obj) && obj.type == "stop_intake";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isIntake(obj: unknown): obj is Intake {
     return this.isBaseAction(obj) && obj.type == "intake";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isPistonShoot(obj: unknown): obj is PistonShoot {
     return this.isBaseAction(obj) && obj.type == "piston_shoot";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isShoot(obj: unknown): obj is Shoot {
     return this.isBaseAction(obj) && obj.type == "shoot";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isExpand(obj: unknown): obj is Expand {
     return this.isBaseAction(obj) && obj.type == "expand";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isRoller(obj: unknown): obj is Roller {
     return this.isBaseAction(obj) && obj.type == "roller";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isFollow(obj: unknown): obj is Follow {
     return this.isBaseAction(obj) && obj.type == "follow";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isTurnTo(obj: unknown): obj is TurnTo {
     return this.isBaseAction(obj) && obj.type == "turn_to";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isGoTo(obj: unknown): obj is GoTo {
     return this.isBaseAction(obj) && obj.type == "go_to";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isSetPose(obj: unknown): obj is SetPose {
     return this.isBaseAction(obj) && obj.type == "set_pose";
   },
   /**
-   * @warning does not check params!
+   * @warn does not check params!
    */
   isAction(obj: unknown): obj is Action {
     return (
