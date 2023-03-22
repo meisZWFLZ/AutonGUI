@@ -124,19 +124,19 @@ export default class Auton<A extends Action = Action> {
     return { type: "follow", params };
   }
   static createIntake(): Intake {
-    return { type: "intake", params: undefined };
+    return { type: "intake", params: {} };
   }
   static createStopIntake(): StopIntake {
-    return { type: "stop_intake", params: undefined };
+    return { type: "stop_intake", params: {} };
   }
   static createShoot(): Shoot {
-    return { type: "shoot", params: undefined };
+    return { type: "shoot", params: {} };
   }
   static createPistonShoot(): PistonShoot {
-    return { type: "piston_shoot", params: undefined };
+    return { type: "piston_shoot", params: {} };
   }
   static createExpand(): Expand {
-    return { type: "expand", params: undefined };
+    return { type: "expand", params: {} };
   }
 }
 

@@ -4,7 +4,9 @@ import { Position } from "./coordinates";
  * @interface Action an action that can be performed by the robot
  * @template P specifies parameters that must be passed to the action
  */
-export interface BaseAction<P> {
+export interface BaseAction<
+  P extends { [k: string]: boolean | number | string }
+> {
   readonly type: string;
   /**
    * @member params specifies parameters that will be passed to the action
@@ -60,33 +62,33 @@ export interface Follow extends BaseAction<Follow.Params> {
   readonly type: "follow";
 }
 
-export interface Roller extends BaseAction<undefined> {
+export interface Roller extends BaseAction<{}> {
   readonly type: "roller";
 }
 
-export interface Expand extends BaseAction<undefined> {
+export interface Expand extends BaseAction<{}> {
   readonly type: "expand";
 }
 
-export interface Shoot extends BaseAction<undefined> {
+export interface Shoot extends BaseAction<{}> {
   readonly type: "shoot";
 }
 
-export interface PistonShoot extends BaseAction<undefined> {
+export interface PistonShoot extends BaseAction<{}> {
   readonly type: "piston_shoot";
 }
 
-export interface Intake extends BaseAction<undefined> {
+export interface Intake extends BaseAction<{}> {
   readonly type: "intake";
 }
 
-export interface StopIntake extends BaseAction<undefined> {
+export interface StopIntake extends BaseAction<{}> {
   readonly type: "stop_intake";
 }
 
 export namespace Wait {
   export type Params = {
-    readonly time: number;
+    readonly milliseconds: number;
   };
 }
 export interface Wait extends BaseAction<Wait.Params> {
@@ -94,7 +96,7 @@ export interface Wait extends BaseAction<Wait.Params> {
 }
 
 export const ActionTypeGuards = {
-  isBaseAction(obj: any): obj is BaseAction<unknown> {
+  isBaseAction(obj: any): obj is BaseAction<{}> {
     return ["params", "type"].every((e) => e in obj);
   },
   /**
