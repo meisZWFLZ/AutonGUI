@@ -315,7 +315,7 @@ export namespace Translation {
           this.offsetOverlap(action, changeOffset)
         );
         // -1 when there is no overlap with any action
-        const lastAffectedIndex: number = findLastIndex(auton.auton, (action) =>
+        const lastAffectedIndex: number = auton.auton.findLastIndex((action) =>
           this.offsetOverlap(action, changeOffset)
         );
         // undefined when there is no overlap with any action
@@ -363,8 +363,7 @@ export namespace Translation {
           count: lastAffectedIndex - firstAffectedIndex,
           index: firstAffectedAction
             ? firstAffectedIndex
-            : findLastIndex(
-                auton.auton,
+            : auton.auton.findLastIndex(
                 (act) => act.offset < changeOffset.offset
               ) + 1,
         };
@@ -377,7 +376,7 @@ export namespace Translation {
             offset: auton.auton[i].offset + offsetAdjustment,
           };
         }
-        
+
         // add to output array
         edits.push(edit);
         // perform edit
@@ -387,25 +386,4 @@ export namespace Translation {
     }
   }
   export class AutonToCpp {}
-  /**
-   * Returns the index of the last element in the array where predicate is true, and -1
-   * otherwise.
-   * @param array The source array to search in
-   * @param predicate find calls predicate once for each element of the array, in descending
-   * order, until it finds one where predicate returns true. If such an element is found,
-   * findLastIndex immediately returns that element index. Otherwise, findLastIndex returns -1.
-   *
-   * @see Copied from {@link https://stackoverflow.com/a/53187807 here}
-   * @note Should be removed once typescript is updated to v5.0.2 and project uses es2023 I believe
-   */
-  export function findLastIndex<T>(
-    array: Array<T>,
-    predicate: (value: T, index: number, obj: T[]) => boolean
-  ): number {
-    let l = array.length;
-    while (l--) {
-      if (predicate(array[l], l, array)) return l;
-    }
-    return -1;
-  }
 }
