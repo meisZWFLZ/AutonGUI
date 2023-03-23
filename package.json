@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/meisZWFLZ/AutonGUI/tree/v0.0.2-pre-alpha"
+    "url": "https://github.com/meisZWFLZ/AutonGUI/"
   },
   "engines": {
     "vscode": "^1.74.0"
