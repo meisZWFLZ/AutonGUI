@@ -7,5 +7,6 @@
         "arrowup",
         "Auton",
         "webviews"
-    ]
+    ],
+    "typescript.tsdk": "node_modules\\typescript\\lib"
 }

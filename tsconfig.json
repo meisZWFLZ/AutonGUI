@@ -2,11 +2,12 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "es2020",
-    "lib": ["es2020"],
+    // required for array.prototype.findLastIndex()
+    "lib": ["ES2023.Array", "ES2020"],
     "outDir": "out",
     "sourceMap": true,
     "strict": true,
-    "rootDirs": ["src"],
+    "rootDirs": ["src"]
   },
   "include": ["./src/**/*"],
   "exclude": ["node_modules", ".vscode-test"]

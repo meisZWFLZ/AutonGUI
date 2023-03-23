@@ -53,8 +53,8 @@ body {
 } */
 .robot {
   aspect-ratio: 1 / 1;
-  width: 12.5%;
-  height: 12.5%;
+  width: 8.86153846154%;
+  height: 8.86153846154%;
   position: relative;
   /* transform-origin: 50% 50%; */
   /* transform: translate(100%, -100%) rotate(90deg); */
@@ -113,8 +113,8 @@ z-index:100;
   outline: none;
   opacity: 0.5;
   margin: 0 1.5%;
-  
-  pointer-events:all;
+
+  pointer-events: all;
 }
 
 .actions button.hidden {

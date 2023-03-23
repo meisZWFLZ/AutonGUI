@@ -18,24 +18,53 @@
   "activationEvents": [],
   "main": "./out/server/server/extension.js",
   "contributes": {
-    "customEditors": [
-      {
-        "viewType": "vrc-auton.builder",
-        "displayName": "Auton Builder",
-        "selector": [
-          {
-            "filenamePattern": "*.vauto"
+    "configuration": {
+      "title": "VRC Auton Builder",
+      "properties": {
+        "vrc-auton.directory": {
+          "type": "array",
+          "description": "Specifies where autons will be stored.\nElements should be an absolute path or a relative path (relative to the workspace).",
+          "default": ["./autons"],
+          "items": {
+            "type": "string"
           }
-        ]
+        }
       }
-    ],
+    },
     "commands": [
       {
-        "command": "vrc-auton.builder.new",
-        "title": "Create new Auton Document",
-        "category": "Auton Builder"
+        "command": "vrc-auton.builder.show",
+        "title": "Show Auton Builder",
+        "category": "Auton Builder",
+        "when": "editorTextFocus && editorLangId == cpp && resourceFilename =~ /^.*\\.cpp$/ && resourcePath not in vrc-auton.builder.visible"
+      },
+      {
+        "command": "vrc-auton.builder.showToSide",
+        "title": "Show Auton Builder to the Side",
+        "category": "Auton Builder",
+        "when": "editorTextFocus && editorLangId == cpp && resourceFilename =~ /^.*\\.cpp$/ && resourcePath not in vrc-auton.builder.visible"
+      },
+      {
+        "command": "vrc-auton.builder.hide",
+        "title": "Hide Auton Builder",
+        "category": "Auton Builder",
+        "when": "editorFocus && editorLangId == cpp && resourceFilename =~ /^.*\\.cpp$/ && resourcePath in vrc-auton.builder.visible"
       }
-    ]
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "when": "editorTextFocus && resourceFilename =~ /^.*\\.cpp$/ && resourcePath not in vrc-auton.builder.visible && resourceDirname in vrc-auton.autonDirs",
+          "command": "vrc-auton.builder.showToSide",
+          "group": "YourGroup@1"
+        },
+        {
+          "when": "editorFocus && resourceFilename =~ /^.*\\.cpp$/ && resourcePath in vrc-auton.builder.visible",
+          "command": "vrc-auton.builder.hide",
+          "group": "YourGroup@1"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

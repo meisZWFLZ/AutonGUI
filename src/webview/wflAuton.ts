@@ -311,8 +311,8 @@ class PawDrawEditor {
             // return this.setRobotPosition({
             return this.listManager.moveRobotTo({
               ...currRobotPos,
-              x: currRobotPos.x + 3 * dir.x,
-              y: currRobotPos.y + 3 * dir.y,
+              x: currRobotPos.x + 1 * dir.x,
+              y: currRobotPos.y + 1 * dir.y,
             });
           case "c":
             try {
@@ -558,7 +558,7 @@ window.addEventListener("message", async ({ data: msg }: { data: Message }) => {
     if (Message.ToWebview.Initialize.Existing.test(msg))
       // editor.listManager.list.update(processUint8Array(msg.content));
       editor.update(msg);
-  } else if (Message.ToWebview.Update.test(msg))
+  } else if (Message.ToWebview.Edit.test(msg))
     // update
     // editor.listManager.list.update(processUint8Array(msg.content), msg.edits);
     editor.update(msg);
