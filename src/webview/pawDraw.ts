@@ -12,7 +12,7 @@ import Message from "../common/message.js";
 import NodeList from "./nodeList.js";
 import type { ACTION, Node as MyNode } from "../common/node.js";
 import ListManager from "./listManager.js";
-import { ListAction, LIST_ACTION_TYPE } from "./eventList.js";
+import { ListAction, LIST_ACTION_TYPE } from "../common/eventList.js";
 
 // @ts-ignore
 const vscode = acquireVsCodeApi();

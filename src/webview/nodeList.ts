@@ -1,4 +1,4 @@
-import EventList, { ListAction } from "./eventList.js";
+import EventList, { ListAction } from "../common/eventList.js";
 // import Message from "../common/message.js";
 import { Node as MyNode } from "../common/node.js";
 import { HasMarginOfError, Position } from "../common/coordinates";

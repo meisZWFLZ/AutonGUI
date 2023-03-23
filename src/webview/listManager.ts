@@ -10,7 +10,7 @@ import {
 import { ACTION, Node } from "../common/node.js";
 import ActionsManager from "./actionsManager.js";
 import ErrorManager from "./errorManager.js";
-import { ListAction } from "./eventList.js";
+import { ListAction } from "../common/eventList.js";
 import NodeList from "./nodeList.js";
 import { Robot } from "./robot.js";
 

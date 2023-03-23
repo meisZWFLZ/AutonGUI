@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { Disposable, disposeAll } from "./dispose";
 import { getNonce } from "./util";
 import Message from "../common/message";
-import { ListAction } from "../webview/eventList";
+import { ListAction } from "../common/eventList";
 import { Node } from "../common/node";
 
 /**
@@ -222,7 +222,7 @@ export class PawDrawEditorProvider
   private static newPawDrawFileId = 1;
 
   public static register(context: vscode.ExtensionContext): vscode.Disposable {
-    vscode.commands.registerCommand("catCustoms.pawDraw.new", () => {
+    vscode.commands.registerCommand("vrc-auton.builder.new", () => {
       const workspaceFolders = vscode.workspace.workspaceFolders;
       if (!workspaceFolders) {
         vscode.window.showErrorMessage(
@@ -258,7 +258,7 @@ export class PawDrawEditorProvider
     );
   }
 
-  private static readonly viewType = "catCustoms.pawDraw";
+  private static readonly viewType = "vrc-auton.builder";
 
   /**
    * Tracks all known webviews

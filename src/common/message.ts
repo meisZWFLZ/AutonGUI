@@ -1,4 +1,4 @@
-import { ListAction } from "../webview/eventList.js";
+import { ListAction } from "./eventList.js";
 import { Node } from "./node.js";
 
 export enum MSG_TARGET {
