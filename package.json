@@ -18,6 +18,18 @@
   "activationEvents": [],
   "main": "./out/server/server/extension.js",
   "contributes": {
+    "customEditors": [
+      {
+        "viewType": "vrc-auton.builder",
+        "displayName": "Auton Builder",
+        "selector": [
+          {
+            "filenamePattern": "*.cpp"
+          }
+        ],
+        "priority": "option"
+      }
+    ],
     "configuration": {
       "title": "VRC Auton Builder",
       "properties": {

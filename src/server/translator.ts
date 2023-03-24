@@ -5,13 +5,13 @@ import * as vscode from "vscode";
 /** responsible for translating cpp text into an auton */
 export namespace Translation {
   /** describes an action and its associated offsets in a text document */
-  type ActionWithOffset = Action & {
+  export type ActionWithOffset = Action & {
     readonly offset: number;
     readonly endOffset: number;
     readonly text: string;
   };
   /** describes an action and its associated range in a text document */
-  type CppAction = Action &
+  export type CppAction = Action &
     ActionWithOffset & {
       readonly range: vscode.Range;
     };
@@ -23,6 +23,7 @@ export namespace Translation {
      */
     static readonly PATTERNS = class Patterns {
       static FLOAT: RegExp = /(?:\d*\.)?\d+/;
+      static INT: RegExp = /\d+/;
       static BOOLEAN: RegExp = /true|false|0|1/;
       static STRING: RegExp = /".*"/;
       static LINE_COMMENT: RegExp = /\/\/.*$/;
@@ -46,7 +47,7 @@ export namespace Translation {
        * @returns a string that matches a param with type int with a named capturing group
        */
       protected static int(n: string): string {
-        return `(?<int_${n}>\\d+)`;
+        return `(?<int_${n}>${Patterns.INT.source})`;
       }
       /**
        * @param {string} n name of capturing group
@@ -163,6 +164,7 @@ export namespace Translation {
       static INTAKE: RegExp = this.func("intake", []);
       static STOP_INTAKE: RegExp = this.func("stopIntake", []);
       static EXPAND: RegExp = this.func("expand", []);
+
       static PATTERNS: { name: string; regex: RegExp }[] = [
         { name: "set_pose", regex: this.SET_POSE },
         { name: "move_to", regex: this.MOVE_TO },
@@ -243,7 +245,7 @@ export namespace Translation {
 
       return new Auton<CppAction>(
         actionArr[0] as SetPose & CppAction,
-        actionArr.slice(0, 1)
+        actionArr.slice(1)
       );
     }
     /**
@@ -324,11 +326,6 @@ export namespace Translation {
         // undefined when there is no overlap with any action
         const lastAffectedAction: ActionWithOffset | undefined =
           auton.auton[lastAffectedIndex];
-
-        // const affectedRange: vscode.Range = new vscode.Range(
-        //   firstAffectedAction.range.start,
-        //   lastAffectedAction.range.end
-        // ).union(contentChange.range);
 
         // offset representing start of affectedText
         const affectedStart: number = firstAffectedAction

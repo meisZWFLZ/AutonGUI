@@ -2,7 +2,7 @@ import { CoordinateUtilities, Position } from "./coordinates.js";
 import {
   SetPose,
   Action,
-  GoTo,
+  MoveTo,
   Intake,
   TurnTo,
   Follow,
@@ -114,8 +114,8 @@ export default class Auton<A extends Action = Action> {
   static createSetPose(params: SetPose.Params): SetPose {
     return { type: "set_pose", params };
   }
-  static createGoTo(params: GoTo.Params): GoTo {
-    return { type: "go_to", params };
+  static createGoTo(params: MoveTo.Params): MoveTo {
+    return { type: "move_to", params };
   }
   static createTurnTo(params: TurnTo.Params): TurnTo {
     return { type: "turn_to", params };

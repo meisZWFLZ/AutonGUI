@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { getNonce } from "./util";
 import Message from "../common/message";
 import Auton from "../common/auton";
+import { Translation } from "./translator";
 
 /**
  * Provider for paw draw editors.
@@ -19,6 +20,16 @@ import Auton from "../common/auton";
  * - Backing up a custom editor.
  */
 export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
+  private static readonly viewType = "vrc-auton.builder";
+  public static register(context: vscode.ExtensionContext): vscode.Disposable {
+    const provider = new AutonEditorProvider(context);
+    const providerRegistration = vscode.window.registerCustomEditorProvider(
+      AutonEditorProvider.viewType,
+      provider
+    );
+    return providerRegistration;
+  }
+
   resolveCustomTextEditor(
     document: vscode.TextDocument,
     webviewPanel: vscode.WebviewPanel,
@@ -41,7 +52,19 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   /**
    * maps document uris to their respective auton
    */
-  protected autonMap: { [key: string]: Auton } = {};
+  protected autonMap: { [key: string]: Auton<Translation.CppAction> } = {};
+
+  /** gets auton associated with document */
+  protected getAuton(doc: vscode.TextDocument): Auton<Translation.CppAction> {
+    return this.autonMap[doc.uri.toString()];
+  }
+  /** sets auton associated with document */
+  protected setAuton(
+    doc: vscode.TextDocument,
+    auton: Auton<Translation.CppAction>
+  ): Auton<Translation.CppAction> {
+    return (this.autonMap[doc.uri.toString()] = auton);
+  }
 
   /**
    * @returns visible text editors associated with document; if none are found, returns an empty array.
@@ -55,6 +78,24 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     );
   }
 
+  /**
+   * Translates the document to an auton
+   */
+  protected static translateDoc(
+    doc: vscode.TextDocument
+  ): Auton<Translation.CppAction> {
+    return Translation.CppToAuton.translateDoc(doc);
+  }
+
+  // /**
+  //  * Translates the edit to an auton
+  //  */
+  // protected static translateDoc(
+  //   doc: vscode.TextDocument
+  // ): Auton<Translation.CppAction> {
+  //   return Translation.CppToAuton.translateDoc(doc);
+  // }
+
   protected msgListeners = new (class MessageListeners {
     constructor(protected editorProvider: AutonEditorProvider) {}
     onReady({
@@ -67,6 +108,17 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       msg: typeof Message.ToExtension.Ready.prototype;
     }): void {
       // translate cpp into an auton and send to webview
+      this.editorProvider.postMessage(
+        webviewPanel,
+        new Message.ToWebview.AutonUpdate(
+          this.editorProvider.setAuton(
+            document,
+            AutonEditorProvider.translateDoc(document)
+          ),
+          0
+        )
+      );
+      console.log({ setAuton: this.editorProvider.getAuton(document) });
     }
     onUpdateIndex({
       webviewPanel,

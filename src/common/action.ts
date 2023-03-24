@@ -21,7 +21,7 @@ export interface SetPose extends BaseAction<SetPose.Params> {
   readonly type: "set_pose";
 }
 
-export namespace GoTo {
+export namespace MoveTo {
   export type Params = {
     readonly x: number;
     readonly y: number;
@@ -30,8 +30,8 @@ export namespace GoTo {
     readonly log?: boolean;
   };
 }
-export interface GoTo extends BaseAction<GoTo.Params> {
-  readonly type: "go_to";
+export interface MoveTo extends BaseAction<MoveTo.Params> {
+  readonly type: "move_to";
 }
 
 export namespace TurnTo {
@@ -156,8 +156,8 @@ export const ActionTypeGuards = {
   /**
    * @warn does not check params!
    */
-  isGoTo(obj: unknown): obj is GoTo {
-    return this.isBaseAction(obj) && obj.type == "go_to";
+  isGoTo(obj: unknown): obj is MoveTo {
+    return this.isBaseAction(obj) && obj.type == "move_to";
   },
   /**
    * @warn does not check params!
@@ -181,7 +181,7 @@ export const ActionTypeGuards = {
         "roller",
         "follow",
         "turn_to",
-        "go_to",
+        "move_to",
         "set_pose",
       ].includes(obj.type)
     );
@@ -190,7 +190,7 @@ export const ActionTypeGuards = {
 
 export type Action =
   | SetPose
-  | GoTo
+  | MoveTo
   | TurnTo
   | Follow
   | Roller

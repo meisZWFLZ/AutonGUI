@@ -4,8 +4,7 @@ import { AutonEditorProvider } from "./autonEditor";
 
 export function activate(context: vscode.ExtensionContext) {
   // Register our custom editor providers
-  // context.subscriptions.push(CatScratchEditorProvider.register(context));
-  // context.subscriptions.push(WaffltonEditorProvider.register(context));
+  context.subscriptions.push(AutonEditorProvider.register(context));
   function isCpp(
     input: vscode.TextEditor | vscode.TextDocument | vscode.Uri | undefined
   ): boolean {
@@ -51,15 +50,15 @@ export function activate(context: vscode.ExtensionContext) {
           patterns = workspaceFolders.map(
             (folder) => new vscode.RelativePattern(folder, dir)
           );
-          console.log({
-            // workspaceUri,
-            workspaceFolders,
-            // pattern,
+          // console.log({
+          //   // workspaceUri,
+          //   workspaceFolders,
+          //   // pattern,
 
-            dir,
-            // workspaceState,
-            // keys: workspaceState?.keys(),
-          });
+          //   dir,
+          //   // workspaceState,
+          //   // keys: workspaceState?.keys(),
+          // });
           return patterns?.map((pattern) => {
             return {
               pattern,
@@ -92,7 +91,7 @@ export function activate(context: vscode.ExtensionContext) {
     // else console.log("disable");
 
     inAutonDirectory(textEditor?.document);
-    console.log("onDidChangeActiveTextEditor" /* textEditor */);
+    // console.log("onDidChangeActiveTextEditor" /* textEditor */);
   }
 
   context.subscriptions.push(
@@ -129,7 +128,7 @@ export function activate(context: vscode.ExtensionContext) {
         // else console.log("disable");
         event.contentChanges;
         inAutonDirectory(event.document);
-        console.log("onDidChangeTextDocument" /* event */);
+        // console.log("onDidChangeTextDocument" /* event */);
       }
     )
   );
@@ -140,7 +139,7 @@ export function activate(context: vscode.ExtensionContext) {
         // if (isCpp(event.textEditor)) console.log("enable");
         // else console.log("disable");
         inAutonDirectory(event.textEditor.document);
-        console.log("onDidChangeTextEditorSelection" /* event */);
+        // console.log("onDidChangeTextEditorSelection" /* event */);
       }
     )
   );
