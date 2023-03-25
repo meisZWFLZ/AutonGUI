@@ -118,7 +118,8 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           0
         )
       );
-      console.log({ setAuton: this.editorProvider.getAuton(document) });
+      // console.log({ setAuton: this.editorProvider.getAuton(document) });
+      Translation.AutonToCpp.generateTextForAction(Auton.createIntake());
     }
     onUpdateIndex({
       webviewPanel,

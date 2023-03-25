@@ -2,8 +2,8 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "es2020",
-    // required for array.prototype.findLastIndex()
-    "lib": ["ES2023.Array", "ES2020"],
+    // required for array.prototype.findLastIndex() and RegExp.prototype.exec().indices
+    "lib": ["ES2023"],
     "outDir": "out",
     "sourceMap": true,
     "strict": true,

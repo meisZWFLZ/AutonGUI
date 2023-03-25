@@ -37,14 +37,13 @@ export default class Auton<A extends Action = Action> {
   public getStartPos(): Position {
     return this.auton[0].params;
   }
-  public append({ action: _act }: AutonEdit.Append<A>) {
-    const acts: A[] = Array.isArray(_act) ? _act : [_act];
-    this._auton.push(...acts);
+  public append(...acts: A[]) {
+    this.replace({ action: acts, index: this._auton.length, count: 0 });
   }
   /**
    * @throws will throw if inserting action not of type {@link SetPose} into the 0th index
    */
-  public insert({ action: _act, index }: AutonEdit.Insert<A>) {
+  public insert({ action: _act, index, count = 0 }: AutonEdit.Insert<A>) {
     const acts: A[] = Array.isArray(_act) ? _act : [_act];
     if (
       index === 0 &&
@@ -54,7 +53,7 @@ export default class Auton<A extends Action = Action> {
       )
     )
       throw 'cannot put an action not of type "SetPose" in 0th index of auton';
-    this._auton.splice(index, 0, ...acts);
+    this.replace({ index, count, action: acts });
   }
   /**
    * @throws will throw if replacing 0th index with an action not of type {@link SetPose}
@@ -74,9 +73,9 @@ export default class Auton<A extends Action = Action> {
   /**
    * @throws will throw if removing 0th element
    */
-  public remove({ index, count = 1 }: AutonEdit.Remove) {
+  public remove({ index, count = 1, action = [] }: AutonEdit.Remove) {
     if (index === 0) throw "cannot remove the 0th element of auton";
-    this.auton.splice(index, count);
+    this.replace({ index, count, action });
   }
   /**
    * @description performs edits starting from the 0th index
@@ -88,22 +87,7 @@ export default class Auton<A extends Action = Action> {
     const edits: AutonEdit.AutonEdit<A>[] = Array.isArray(_edit)
       ? _edit
       : [_edit];
-    edits.forEach((edit) => {
-      switch (edit.type) {
-        case "append":
-          this.append(edit);
-          break;
-        case "insert":
-          this.insert(edit);
-          break;
-        case "replace":
-          this.replace(edit);
-          break;
-        case "remove":
-          this.remove(edit);
-          break;
-      }
-    });
+    edits.forEach(this.replace);
   }
 
   // if for some reason the create functions must be redone, I used this snippet:
@@ -141,45 +125,40 @@ export default class Auton<A extends Action = Action> {
 }
 
 export namespace AutonEdit {
-  export interface Base {
-    readonly type: "append" | "insert" | "replace" | "remove";
-  }
-  export interface Append<A extends Action> extends Base {
-    readonly type: "append";
-    readonly action: A | A[];
-  }
+  // export interface Base {
+  //   readonly type: "append" | "insert" | "replace" | "remove";
+  // }
+  // export interface Append<A extends Action> extends Base {
+  //   readonly type: "append";
+  //   readonly action: A | A[];
+  // }
   /**
    * @warn if index is zero, oth element of action must be {@link SetPose}
    */
-  export interface Insert<A extends Action> extends Base {
-    readonly type: "insert";
+  export interface Insert<A extends Action> extends Replace<A> {
+    // readonly type: "insert";
     readonly action: A | A[];
     readonly index: number;
+    readonly count: 0;
   }
   /**
    * @warn if index is zero, 0th element of action must be {@link SetPose}
    */
-  export interface Replace<A extends Action> extends Base {
-    readonly type: "replace";
+  export interface Replace<A extends Action> {
     readonly action: A | A[];
     readonly index: number;
     /**
      * @description specifies the number of elements of the original array to replace with the new elements (0 acts like insert)
-     * @defaultvalue actions.length or 1 if action is not an array
      */
-    readonly count?: number;
+    readonly count: number;
   }
   /**
    * @warn index must be greater than zero
    */
-  export interface Remove extends Base {
-    readonly type: "remove";
+  export interface Remove extends Replace<Action> {
+    readonly action: [];
     readonly index: number;
-    readonly count?: number;
+    readonly count: number;
   }
-  export type AutonEdit<A extends Action = Action> =
-    | Append<A>
-    | Insert<A>
-    | Replace<A>
-    | Remove;
+  export type AutonEdit<A extends Action = Action> = Replace<A>;
 }

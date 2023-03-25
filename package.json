@@ -36,7 +36,9 @@
         "vrc-auton.directory": {
           "type": "array",
           "description": "Specifies where autons will be stored.\nElements should be an absolute path or a relative path (relative to the workspace).",
-          "default": ["./autons"],
+          "default": [
+            "./autons"
+          ],
           "items": {
             "type": "string"
           }

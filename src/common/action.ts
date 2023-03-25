@@ -1,12 +1,13 @@
 import { Position } from "./coordinates";
 
+export namespace BaseAction {
+  export type Params = { [k: string]: boolean | number | string | undefined };
+}
 /**
  * @interface Action an action that can be performed by the robot
  * @template P specifies parameters that must be passed to the action
  */
-export interface BaseAction<
-  P extends { [k: string]: boolean | number | string }
-> {
+export interface BaseAction<P extends BaseAction.Params> {
   readonly type: string;
   /**
    * @member params specifies parameters that will be passed to the action
@@ -17,79 +18,80 @@ export interface BaseAction<
 export namespace SetPose {
   export type Params = Position;
 }
-export interface SetPose extends BaseAction<SetPose.Params> {
+export interface SetPose
+  extends BaseAction<SetPose.Params & BaseAction.Params> {
   readonly type: "set_pose";
 }
 
 export namespace MoveTo {
-  export type Params = {
+  export interface Params extends BaseAction.Params {
     readonly x: number;
     readonly y: number;
     readonly timeout: number;
     readonly maxSpeed?: number;
     readonly log?: boolean;
-  };
+  }
 }
 export interface MoveTo extends BaseAction<MoveTo.Params> {
   readonly type: "move_to";
 }
 
 export namespace TurnTo {
-  export type Params = {
+  export interface Params extends BaseAction.Params {
     readonly x: number;
     readonly y: number;
     readonly timeout: number;
     readonly reversed?: boolean;
     readonly maxSpeed?: number;
     readonly log?: boolean;
-  };
+  }
 }
 export interface TurnTo extends BaseAction<TurnTo.Params> {
   readonly type: "turn_to";
 }
 
 export namespace Follow {
-  export type Params = {
+  export interface Params extends BaseAction.Params {
     readonly filePath: string;
     readonly timeout: number;
     readonly lookahead: number;
     readonly reverse?: boolean;
     readonly maxSpeed?: number;
     readonly log?: boolean;
-  };
+  }
 }
 export interface Follow extends BaseAction<Follow.Params> {
   readonly type: "follow";
 }
 
-export interface Roller extends BaseAction<{}> {
+export interface Roller extends BaseAction<BaseAction.Params> {
   readonly type: "roller";
 }
 
-export interface Expand extends BaseAction<{}> {
+export interface Expand extends BaseAction<BaseAction.Params> {
   readonly type: "expand";
 }
 
-export interface Shoot extends BaseAction<{}> {
+export interface Shoot extends BaseAction<BaseAction.Params> {
   readonly type: "shoot";
 }
 
-export interface PistonShoot extends BaseAction<{}> {
+export interface PistonShoot extends BaseAction<BaseAction.Params> {
   readonly type: "piston_shoot";
 }
 
-export interface Intake extends BaseAction<{}> {
+export interface Intake extends BaseAction<BaseAction.Params> {
   readonly type: "intake";
 }
 
-export interface StopIntake extends BaseAction<{}> {
+export interface StopIntake extends BaseAction<BaseAction.Params> {
   readonly type: "stop_intake";
 }
 
 export namespace Wait {
-  export type Params = {
+  export interface Params extends BaseAction.Params {
     readonly milliseconds: number;
-  };
+  }
 }
 export interface Wait extends BaseAction<Wait.Params> {
   readonly type: "wait";

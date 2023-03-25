@@ -9,6 +9,7 @@ export namespace Translation {
     readonly offset: number;
     readonly endOffset: number;
     readonly text: string;
+    readonly groupIndices: { [k: string]: [number, number] };
   };
   /** describes an action and its associated range in a text document */
   export type CppAction = Action &
@@ -16,68 +17,82 @@ export namespace Translation {
       readonly range: vscode.Range;
     };
 
-  export class CppToAuton {
+  export namespace CppToAuton {
     /**
      * @note if pattern matching is exceedingly slow, then the {@link CppToAuton.PATTERNS.COMPILER_IGNORES COMPILER_IGNORES's} may be the culprit
      * @todo modify to not recognize commented actions
      */
-    static readonly PATTERNS = class Patterns {
-      static FLOAT: RegExp = /(?:\d*\.)?\d+/;
-      static INT: RegExp = /\d+/;
-      static BOOLEAN: RegExp = /true|false|0|1/;
-      static STRING: RegExp = /".*"/;
-      static LINE_COMMENT: RegExp = /\/\/.*$/;
+    export namespace PATTERNS {
+      export type PatternComposition = (
+        | string
+        | {
+            str: string;
+            separator?: boolean;
+            indent?: boolean;
+            control?: boolean;
+          }
+      )[];
+      export type Pattern = RegExp & {
+        composition: PatternComposition;
+      };
+      export type Param = (
+        | { string: string }
+        | { bool: string }
+        | { int: string }
+        | { float: string }
+      ) & { opt?: boolean };
+      export const FLOAT: RegExp = /(?:\d*\.)?\d+/;
+      export const INT: RegExp = /\d+/;
+      export const BOOLEAN: RegExp = /true|false|0|1/;
+      export const STRING: RegExp = /".*"/;
+      export const LINE_COMMENT: RegExp = /\/\/.*$/;
 
-      static BLOCK_COMMENT: RegExp = /\/\*[\w\W]*?\*\//;
+      export const BLOCK_COMMENT: RegExp = /\/\*[\w\W]*?\*\//;
       /* matches spaces and newlines */
-      static SPACE_AND_LINE: RegExp = /[\s\n]+/;
+      export const SPACE_AND_LINE: RegExp = /[\s\n]+/;
       /** matches text that is ignored by the compiler */
-      static COMPILER_IGNORES: RegExp = new RegExp(
-        `(?:${this.LINE_COMMENT.source}|${this.BLOCK_COMMENT.source}|${this.SPACE_AND_LINE.source})*`
+      export const COMPILER_IGNORES: RegExp = new RegExp(
+        `(?:${LINE_COMMENT.source}|${BLOCK_COMMENT.source}|${SPACE_AND_LINE.source})*`
       );
       /**
        * @param {string} n name of capturing group
        * @returns a string that matches a param with type float with a named capturing group
        */
-      protected static float(n: string): string {
-        return `(?<float_${n}>${Patterns.FLOAT.source})`;
+      export function float(n: string): string {
+        return `(?<float_${n}>${FLOAT.source})`;
       }
       /**
        * @param {string} n name of capturing group
        * @returns a string that matches a param with type int with a named capturing group
        */
-      protected static int(n: string): string {
-        return `(?<int_${n}>${Patterns.INT.source})`;
+      export function int(n: string): string {
+        return `(?<int_${n}>${INT.source})`;
       }
       /**
        * @param {string} n name of capturing group
        * @returns a string that matches a param with type bool with a named capturing group
        */
-      protected static bool(n: string): string {
-        return `(?<bool_${n}>${Patterns.BOOLEAN.source})`;
+      export function bool(n: string): string {
+        return `(?<bool_${n}>${BOOLEAN.source})`;
       }
       /**
        * @param {string} n name of capturing group
        * @returns a string that matches a param with type string with a named capturing group
        */
-      protected static string(n: string): string {
-        return `(?<string_${n}>${Patterns.STRING.source})`;
+      export function string(n: string): string {
+        return `(?<string_${n}>${STRING.source})`;
       }
       /**
        * @returns separator surrounded by "[\s\n]*"'s
        */
-      protected static s(separator: string): string {
-        return (
-          this.COMPILER_IGNORES.source +
-          separator +
-          this.COMPILER_IGNORES.source
-        );
+      export function s(separator: string): string {
+        return COMPILER_IGNORES.source + separator + COMPILER_IGNORES.source;
       }
       /**
        * @param content will be the content of the capturing group
        * @returns an optional non-capturing group containing {@link content}
        */
-      protected static opt(content: string): string {
+      export function opt(content: string): string {
         return `(?:${content})?`;
       }
       /**
@@ -87,49 +102,68 @@ export namespace Translation {
        * @returns a regex that matches a cpp function in auton with the specified name and params
        * @warn will match a function even if it is within a block comment
        */
-      protected static func(
-        funcName: string,
-        params: ((
-          | { string: string }
-          | { bool: string }
-          | { int: string }
-          | { float: string }
-        ) & { opt?: boolean })[]
-      ): RegExp {
+      export function func(funcName: string, params: Param[]): Pattern {
         let optStartIndex: number = params.length;
-        return new RegExp(
-          `(?<=^(?:${this.SPACE_AND_LINE.source}|${this.BLOCK_COMMENT.source}))` +
-            "auton" +
-            this.s("::") +
-            funcName +
-            this.s("\\(") +
-            params
-              .sort((a, b) => +(a.opt ?? 0) - +(b.opt ?? 0))
-              .map((param, i) => {
-                if (param.opt) optStartIndex = Math.min(optStartIndex, i);
-                let out = "";
-                if ("string" in param) out = this.string(param.string);
-                else if ("bool" in param) out = this.bool(param.bool);
-                else if ("int" in param) out = this.int(param.int);
-                else if ("float" in param) out = this.float(param.float);
-                return (
-                  (param.opt ? "(?:" : "") + (i > 0 ? this.s(",") : "") + out
-                );
-              })
-              .join("") +
-            new Array(params.length - optStartIndex).fill(")?").join("") +
-            this.s("\\)") +
-            ";",
-          "gm"
-        );
+        let composition: PatternComposition = [
+          {
+            str: `(?<=^(?:${SPACE_AND_LINE.source}|${BLOCK_COMMENT.source}))`,
+            indent: true,
+          },
+          "auton",
+          { str: "::", separator: true },
+          funcName,
+          { str: "\\(", separator: true },
+          params
+            .sort((a, b) => +(a.opt ?? 0) - +(b.opt ?? 0))
+            .map((param, i) => {
+              if (param.opt) optStartIndex = Math.min(optStartIndex, i);
+              let out = "";
+              if ("string" in param) out = string(param.string);
+              else if ("bool" in param) out = bool(param.bool);
+              else if ("int" in param) out = int(param.int);
+              else if ("float" in param) out = float(param.float);
+              return [
+                param.opt
+                  ? {
+                      str: "(?:",
+                      control: true,
+                    }
+                  : "",
+                i > 0 ? { str: ",", separator: true } : "",
+                out,
+              ];
+            }),
+          new Array(params.length - optStartIndex).fill({
+            str: ")?",
+            control: true,
+          }),
+          { str: "\\)", separator: true },
+          ";",
+        ].flat(20 /* completely flatten */);
+        return {
+          ...RegExp.prototype,
+          ...new RegExp(
+            composition
+              .map((e): string =>
+                typeof e == "object"
+                  ? e.separator === true
+                    ? s(e.str)
+                    : e.str
+                  : e
+              )
+              .join(""),
+            "dgm"
+          ),
+          composition,
+        } as Pattern;
       }
-      static SET_POSE: RegExp = this.func("setPose", [
+      export const SET_POSE: Pattern = func("setPose", [
         { float: "x" },
         { float: "y" },
         { float: "theta" },
         { bool: "radians", opt: true },
       ]);
-      static TURN_TO: RegExp = this.func("turnTo", [
+      export const TURN_TO: Pattern = func("turnTo", [
         { float: "x" },
         { float: "y" },
         { int: "timeout" },
@@ -137,101 +171,104 @@ export namespace Translation {
         { float: "maxSpeed", opt: true },
         { bool: "log", opt: true },
       ]);
-      static MOVE_TO: RegExp = this.func("moveTo", [
+      export const MOVE_TO: Pattern = func("moveTo", [
         { float: "x" },
         { float: "y" },
         { int: "timeout" },
         { float: "maxSpeed", opt: true },
         { bool: "log", opt: true },
       ]);
-      static FOLLOW: RegExp = this.func("follow", [
+      export const FOLLOW: Pattern = func("follow", [
         { string: "filePath" },
         { int: "timeout" },
         { float: "lookahead" },
         { float: "maxSpeed", opt: true },
         { bool: "log", opt: true },
       ]);
-      static WAIT: RegExp = this.func("wait", [{ int: "milliseconds" }]);
+      export const WAIT: Pattern = func("wait", [{ int: "milliseconds" }]);
 
       // snippet:
       // "func": {
       // 	"prefix": "func",
-      // 	"body": "static $1: RegExp = this.func(\"$2\", []);\n$0"
+      // 	"body": "static $1: Pattern = func(\"$2\", []);\n$0"
       // }
-      static ROLLER: RegExp = this.func("roller", []);
-      static SHOOT: RegExp = this.func("shoot", []);
-      static PISTON_SHOOT: RegExp = this.func("pistonShoot", []);
-      static INTAKE: RegExp = this.func("intake", []);
-      static STOP_INTAKE: RegExp = this.func("stopIntake", []);
-      static EXPAND: RegExp = this.func("expand", []);
+      export const ROLLER: Pattern = func("roller", []);
+      export const SHOOT: Pattern = func("shoot", []);
+      export const PISTON_SHOOT: Pattern = func("pistonShoot", []);
+      export const INTAKE: Pattern = func("intake", []);
+      export const STOP_INTAKE: Pattern = func("stopIntake", []);
+      export const EXPAND: Pattern = func("expand", []);
 
-      static PATTERNS: { name: string; regex: RegExp }[] = [
-        { name: "set_pose", regex: this.SET_POSE },
-        { name: "move_to", regex: this.MOVE_TO },
-        { name: "turn_to", regex: this.TURN_TO },
-        { name: "follow", regex: this.FOLLOW },
-        { name: "wait", regex: this.WAIT },
-        { name: "roller", regex: this.ROLLER },
-        { name: "shoot", regex: this.SHOOT },
-        { name: "piston_shoot", regex: this.PISTON_SHOOT },
-        { name: "intake", regex: this.INTAKE },
-        { name: "stop_intake", regex: this.STOP_INTAKE },
-        { name: "expand", regex: this.EXPAND },
+      export const PATTERNS: { name: string; pattern: Pattern }[] = [
+        { name: "set_pose", pattern: SET_POSE },
+        { name: "move_to", pattern: MOVE_TO },
+        { name: "turn_to", pattern: TURN_TO },
+        { name: "follow", pattern: FOLLOW },
+        { name: "wait", pattern: WAIT },
+        { name: "roller", pattern: ROLLER },
+        { name: "shoot", pattern: SHOOT },
+        { name: "piston_shoot", pattern: PISTON_SHOOT },
+        { name: "intake", pattern: INTAKE },
+        { name: "stop_intake", pattern: STOP_INTAKE },
+        { name: "expand", pattern: EXPAND },
       ];
-    };
+    }
 
-    public static translateText(text: string): ActionWithOffset[] {
-      return this.PATTERNS.PATTERNS.flatMap((pattern) =>
-        Array.from(text.matchAll(pattern.regex)).map((match) => {
+    export function translateText(text: string): ActionWithOffset[] {
+      return PATTERNS.PATTERNS.flatMap((pattern) =>
+        Array.from(text.matchAll(pattern.pattern)).map((match) => {
           return { action: pattern.name, match };
         })
       )
         .sort((a, b) => (a.match.index ?? 0) - (b.match.index ?? 0))
-        .map(({ action, match }) => {
+        .map(({ action, match }): ActionWithOffset => {
           const index: number = match.index ?? 0;
           return {
+            // @ts-ignore
             type: action,
-            params:
-              match.groups &&
-              Object.fromEntries(
-                Object.entries(match.groups).flatMap(
-                  ([groupName, value]): [
-                    string,
-                    number | string | boolean
-                  ][] => {
-                    if (value === undefined) return [];
-                    const type = groupName.split("_")[0] as
-                      | "bool"
-                      | "int"
-                      | "string"
-                      | "float";
-                    const name = groupName.split("_").slice(1).join("");
-                    let trueValue: boolean | string | number;
-                    switch (type) {
-                      case "bool":
-                        trueValue = Boolean(value);
-                      case "string":
-                        trueValue = String(value);
-                      case "int":
-                      case "float":
-                        trueValue = Number(value);
-                      default:
-                        trueValue = value as never;
+            params: match.groups
+              ? Object.fromEntries(
+                  Object.entries(match.groups).flatMap(
+                    ([groupName, value]): [
+                      string,
+                      number | string | boolean
+                    ][] => {
+                      if (value === undefined || groupName.startsWith("_"))
+                        return [];
+                      const type = groupName.split("_")[0] as
+                        | "bool"
+                        | "int"
+                        | "string"
+                        | "float";
+                      const name = groupName.split("_").slice(1).join("");
+                      let trueValue: boolean | string | number;
+                      switch (type) {
+                        case "bool":
+                          trueValue = Boolean(value);
+                        case "string":
+                          trueValue = String(value);
+                        case "int":
+                        case "float":
+                          trueValue = Number(value);
+                        default:
+                          trueValue = value as never;
+                      }
+                      return [[name, trueValue]];
                     }
-                    return [[name, trueValue]];
-                  }
+                  )
                 )
-              ),
+              : {},
             offset: index,
             endOffset: index + match[0].length,
             text: match[0],
+            groupIndices: match.indices?.groups ?? {},
           };
         })
         .filter((e): e is ActionWithOffset => ActionTypeGuards.isAction(e));
     }
-    public static translateDoc(doc: vscode.TextDocument): Auton<CppAction> {
-      let actionArr: CppAction[] = this.offsetToRange(
-        this.translateText(doc.getText()),
+    export function translateDoc(doc: vscode.TextDocument): Auton<CppAction> {
+      let actionArr: CppAction[] = offsetToRange(
+        translateText(doc.getText()),
         doc
       );
 
@@ -253,11 +290,11 @@ export namespace Translation {
      * @param offset the offset of the substring within the document
      * @returns translation of the substring offset relative to the entire document
      */
-    static translateSubString(
+    export function translateSubString(
       subStr: string,
       offset: number
     ): ActionWithOffset[] {
-      return this.translateText(subStr).map((action) => {
+      return translateText(subStr).map((action) => {
         return {
           ...action,
           offset: action.offset + offset,
@@ -271,7 +308,7 @@ export namespace Translation {
      * @param doc informs function how to transform the offsets
      * @returns transformed array
      */
-    static offsetToRange(
+    export function offsetToRange(
       arr: ActionWithOffset[],
       doc: vscode.TextDocument
     ): CppAction[] {
@@ -286,7 +323,7 @@ export namespace Translation {
       });
     }
     /** @returns whether range1 and range2 overlap / intersect  */
-    protected static offsetOverlap(
+    function offsetOverlap(
       range1: { offset: number; endOffset: number },
       range2: { offset: number; endOffset: number }
     ): boolean {
@@ -299,7 +336,7 @@ export namespace Translation {
     /**
      * @returns edits made to auton by the change (Will modify auton!)
      */
-    static changeAuton(
+    export function changeAuton(
       auton: Auton<ActionWithOffset>,
       change: vscode.TextDocumentChangeEvent
     ): AutonEdit.AutonEdit[] {
@@ -314,11 +351,11 @@ export namespace Translation {
         const firstAffectedIndex: number = auton.auton.findIndex((action) =>
           // action.range.intersection()
           // contentChange.rangeOffset <= action.offset
-          this.offsetOverlap(action, changeOffset)
+          offsetOverlap(action, changeOffset)
         );
         // -1 when there is no overlap with any action
         const lastAffectedIndex: number = auton.auton.findLastIndex((action) =>
-          this.offsetOverlap(action, changeOffset)
+          offsetOverlap(action, changeOffset)
         );
         // undefined when there is no overlap with any action
         const firstAffectedAction: ActionWithOffset | undefined =
@@ -350,12 +387,11 @@ export namespace Translation {
             changeOffset.endOffset - lastAffectedAction!.endOffset
           );
 
-        const newActions: ActionWithOffset[] = this.translateSubString(
+        const newActions: ActionWithOffset[] = translateSubString(
           affectedText,
           affectedStart
         );
-        const edit: Required<AutonEdit.Replace<ActionWithOffset>> = {
-          type: "replace",
+        const edit: AutonEdit.Replace<ActionWithOffset> = {
           action: newActions,
           count: lastAffectedIndex - firstAffectedIndex,
           index: firstAffectedAction
@@ -382,5 +418,51 @@ export namespace Translation {
       return edits;
     }
   }
-  export class AutonToCpp {}
+  export namespace AutonToCpp {
+    /**
+     * translates an auton edit into its textual {@link vscode.WorkspaceEdit edit}
+     */
+    export function translateAutonEdit(
+      auton: Auton<ActionWithOffset>,
+      doc: vscode.TextDocument,
+      edit: AutonEdit.AutonEdit<ActionWithOffset>,
+      workspaceEdit?: vscode.WorkspaceEdit
+    ): vscode.WorkspaceEdit {
+      return "" as unknown as vscode.WorkspaceEdit;
+    }
+    const PARAM_PATTERN: RegExp =
+      /\(\?\<(?<type>int|string|float|bool)_(?<paramName>\w+)\>.+\)/;
+    export function generateTextForAction(action: Action, indent?: string): string {
+      return CppToAuton.PATTERNS.PATTERNS.find((e) => e.name === action.type)!
+        .pattern.composition.map((e): string => {
+          let str: string;
+          if (typeof e === "object") {
+            if (e.separator === true)
+              return e.separator + (e.str === "," ? " " : "");
+            else if (e.control === true) return "";
+            else if (e.indent === true) return indent ?? "\9";
+            str = e.str;
+          } else {
+            str = e;
+          }
+          if (PARAM_PATTERN.test(str)) {
+            const groups = PARAM_PATTERN.exec(str)!.groups!;
+            const name: string = groups.paramName;
+            const type: string = groups.paramName;
+            if (name in action.params)
+              switch (type) {
+                case "int":
+                case "float":
+                  return Number(action.params[name]).toString();
+                case "bool":
+                  return Boolean(action.params[name]).toString();
+                case "string":
+                  return action.params[name] as string;
+              }
+          }
+          return str;
+        })
+        .join("");
+    }
+  }
 }
