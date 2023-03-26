@@ -4,6 +4,13 @@ import Message from "../common/message";
 import Auton from "../common/auton";
 import { Translation } from "./translator";
 
+type CppAuton = Auton<Translation.CppAction>;
+type DocumentInfo = {
+  auton: CppAuton;
+  /** informs text edit listener that the edit is due to this class and that it can ignore it */
+  modifiedText: boolean;
+};
+
 /**
  * Provider for paw draw editors.
  *
@@ -21,13 +28,20 @@ import { Translation } from "./translator";
  */
 export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   private static readonly viewType = "vrc-auton.builder";
-  public static register(context: vscode.ExtensionContext): vscode.Disposable {
-    const provider = new AutonEditorProvider(context);
+  private static provider: AutonEditorProvider;
+
+  public static register(
+    context: vscode.ExtensionContext
+  ): vscode.Disposable[] {
+    this.provider = new AutonEditorProvider(context);
     const providerRegistration = vscode.window.registerCustomEditorProvider(
       AutonEditorProvider.viewType,
-      provider
+      this.provider
     );
-    return providerRegistration;
+    const docInfoRemover = vscode.workspace.onDidCloseTextDocument((doc) =>
+      this.provider.deleteDocInfo(doc)
+    );
+    return [providerRegistration];
   }
 
   resolveCustomTextEditor(
@@ -46,24 +60,38 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         this.messageListener({ webviewPanel, document, msg })
       );
     webviewPanel.onDidDispose(() => messageReceivedSubscription.dispose());
-
-    // translate document to an auton and add to autonMap
   }
   /**
-   * maps document uris to their respective auton
+   * maps document uris to their respective info
    */
-  protected autonMap: { [key: string]: Auton<Translation.CppAction> } = {};
+  protected documentInfo: {
+    [key: string]: DocumentInfo;
+  } = {};
+
+  protected getDocInfo(doc: vscode.TextDocument): DocumentInfo {
+    return this.documentInfo[doc.uri.toString()];
+  }
+  protected setDocInfo(
+    doc: vscode.TextDocument,
+    docInfo: DocumentInfo
+  ): DocumentInfo {
+    return (this.documentInfo[doc.uri.toString()] = docInfo);
+  }
+  protected deleteDocInfo(doc: vscode.TextDocument): boolean {
+    return delete this.documentInfo[doc.uri.toString()];
+  }
 
   /** gets auton associated with document */
-  protected getAuton(doc: vscode.TextDocument): Auton<Translation.CppAction> {
-    return this.autonMap[doc.uri.toString()];
+  protected getAuton(doc: vscode.TextDocument): CppAuton {
+    return this.getDocInfo(doc).auton;
   }
   /** sets auton associated with document */
-  protected setAuton(
-    doc: vscode.TextDocument,
-    auton: Auton<Translation.CppAction>
-  ): Auton<Translation.CppAction> {
-    return (this.autonMap[doc.uri.toString()] = auton);
+  protected setAuton(doc: vscode.TextDocument, auton: CppAuton): CppAuton {
+    const uri = doc.uri.toString();
+    const info = this.documentInfo[uri];
+    if (info !== undefined && typeof info === "object") info.auton = auton;
+    else this.documentInfo[uri] = { auton: auton, modifiedText: false };
+    return auton;
   }
 
   /**
@@ -144,8 +172,19 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       document: vscode.TextDocument;
       msg: typeof Message.ToExtension.Edit.prototype;
     }): void {
-      // modify auton associated with document using msg.edit
-      // then, translate auton to cpp and modify document using cpp
+      // interpret auton edit as a workspace edit and then apply the workspace edit
+      vscode.workspace.applyEdit(
+        msg.edit.reduce((accumulator: vscode.WorkspaceEdit, edit) => {
+          const workspaceEdit = Translation.AutonToCpp.translateAutonEdit(
+            this.editorProvider.getAuton(document),
+            document,
+            edit,
+            accumulator
+          );
+          return workspaceEdit;
+        }, new vscode.WorkspaceEdit())
+      );
+      this.editorProvider.getDocInfo(document).modifiedText == true;
     }
   })(this);
 
@@ -207,13 +246,29 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       webviewPanel: vscode.WebviewPanel;
       document: vscode.TextDocument;
       event: vscode.TextDocumentChangeEvent;
-    }) {
+    }): void {
       if (event.document.uri.toString() !== document.uri.toString()) return;
+      // if this event was caused by the editorProvider, then ignore it
+      if (this.editorProvider.getDocInfo(document).modifiedText == true) {
+        this.editorProvider.getDocInfo(document).modifiedText = false;
+        return;
+      }
+
       // translate edit to auton edit and send to webview
+      this.editorProvider.postMessage(
+        webviewPanel,
+        new Message.ToWebview.Edit(
+          Translation.CppToAuton.changeAuton(
+            this.editorProvider.getAuton(document),
+            event
+          ),
+          0
+        )
+      );
     }
   })(this);
 
-  constructor(private readonly _context: vscode.ExtensionContext) {}
+  private constructor(private readonly _context: vscode.ExtensionContext) {}
 
   /**
    * Get the static HTML used for in our editor's webviews.

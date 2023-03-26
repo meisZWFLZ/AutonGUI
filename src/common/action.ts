@@ -6,13 +6,18 @@ export namespace BaseAction {
 /**
  * @interface Action an action that can be performed by the robot
  * @template P specifies parameters that must be passed to the action
+ * @member params specifies parameters that will be passed to the action
  */
 export interface BaseAction<P extends BaseAction.Params> {
   readonly type: string;
   /**
-   * @member params specifies parameters that will be passed to the action
+   * specifies parameters that will be passed to the action
    */
   readonly params: P;
+  /**
+   * used to identify when an action is being modified
+   */
+  readonly uuid: string;
 }
 
 export namespace SetPose {

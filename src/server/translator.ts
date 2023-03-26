@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { Action, ActionTypeGuards, SetPose } from "../common/action";
 import Auton, { AutonData, AutonEdit } from "../common/auton";
 import * as vscode from "vscode";
@@ -32,7 +33,8 @@ export namespace Translation {
             control?: boolean;
           }
       )[];
-      export type Pattern = RegExp & {
+      export type Pattern = {
+        regex: RegExp;
         composition: PatternComposition;
       };
       export type Param = (
@@ -141,8 +143,7 @@ export namespace Translation {
           ";",
         ].flat(20 /* completely flatten */);
         return {
-          ...RegExp.prototype,
-          ...new RegExp(
+          regex: new RegExp(
             composition
               .map((e): string =>
                 typeof e == "object"
@@ -155,7 +156,7 @@ export namespace Translation {
             "dgm"
           ),
           composition,
-        } as Pattern;
+        };
       }
       export const SET_POSE: Pattern = func("setPose", [
         { float: "x" },
@@ -215,9 +216,10 @@ export namespace Translation {
     }
 
     export function translateText(text: string): ActionWithOffset[] {
-      return PATTERNS.PATTERNS.flatMap((pattern) =>
-        Array.from(text.matchAll(pattern.pattern)).map((match) => {
-          return { action: pattern.name, match };
+      console.log({ PATTERNS });
+      return PATTERNS.PATTERNS.flatMap(({ pattern: { regex: pattern }, name }) =>
+        Array.from(text.matchAll(pattern)).map((match) => {
+          return { action: name, match };
         })
       )
         .sort((a, b) => (a.match.index ?? 0) - (b.match.index ?? 0))
@@ -258,6 +260,7 @@ export namespace Translation {
                   )
                 )
               : {},
+            uuid: randomUUID(),
             offset: index,
             endOffset: index + match[0].length,
             text: match[0],
@@ -428,16 +431,62 @@ export namespace Translation {
       edit: AutonEdit.AutonEdit<Action>,
       workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit()
     ): vscode.WorkspaceEdit {
-      const acts: Action[] = Array.isArray(edit.action)
+      /** actions in auton that will be modified or deleted by the edit */
+      const affectedAutonActs = auton.auton.slice(
+        edit.index,
+        edit.index + edit.count
+      );
+      /** new acts in edit */
+      const editActs: Action[] = Array.isArray(edit.action)
         ? edit.action
         : [edit.action];
-      const adding: number = acts.length;
-      const removing: number = edit.count;
 
-      return "" as unknown as vscode.WorkspaceEdit;
+      // removes text associated with the actions that will be deleted
+      for (const deletedAct of affectedAutonActs
+        // if action is modified, we do not want to remove it
+        .filter(
+          ({ uuid, type }) =>
+            !editActs.some(
+              ({ uuid: newUUID, type: newType }) =>
+                newUUID === uuid && type === newType
+            )
+        ))
+        workspaceEdit.delete(doc.uri, upgradeOffsetsToRange(deletedAct, doc));
+
+      /** where should the next edit be written (used for new actions) */
+      let writeOffset: number = auton.auton.at(edit.index)?.offset ?? 0;
+
+      // either modify or create new action
+      for (const newAct of editActs) {
+        let modifiedAct: ActionWithOffset | undefined;
+        if (
+          // is newAct a modified version of an action in affectedAutonActs
+          (modifiedAct = affectedAutonActs.find(
+            ({ uuid, type }) => uuid === newAct.uuid && type === newAct.type
+          )) !== undefined
+        )
+          // update existing action's params
+          updateActionParams(
+            { ...modifiedAct, params: newAct.params } as ActionWithOffset,
+            doc,
+            workspaceEdit
+          );
+        else {
+          // add new action's text to document
+          workspaceEdit.insert(
+            doc.uri,
+            doc.positionAt(writeOffset),
+            generateTextForAction(newAct)
+          );
+        }
+        // update next action location
+        writeOffset += workspaceEdit.get(doc.uri).at(-1)?.newText.length ?? 0;
+      }
+
+      return workspaceEdit;
     }
-    /** 
-     * adds a replace {@link vscode.TextEdit TextEdit } to workspaceEdit that \t updates the params 
+    /**
+     * adds a replace {@link vscode.TextEdit TextEdit } to workspaceEdit that \t updates the params
      */
     export function updateActionParams(
       action: ActionWithOffset,
@@ -469,10 +518,10 @@ export namespace Translation {
         });
       return workspaceEdit;
     }
-    /** 
-     * generates text for an action 
+    /**
+     * generates text for an action
      * @param indent specifies how the start of the string should be indented
-    */
+     */
     export function generateTextForAction(
       action: Action,
       indent: string = "\t"

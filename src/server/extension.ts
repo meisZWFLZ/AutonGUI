@@ -4,7 +4,7 @@ import { AutonEditorProvider } from "./autonEditor";
 
 export function activate(context: vscode.ExtensionContext) {
   // Register our custom editor providers
-  context.subscriptions.push(AutonEditorProvider.register(context));
+  context.subscriptions.push(...AutonEditorProvider.register(context));
   function isCpp(
     input: vscode.TextEditor | vscode.TextDocument | vscode.Uri | undefined
   ): boolean {

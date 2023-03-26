@@ -12,6 +12,7 @@ import {
   StopIntake,
   ActionTypeGuards,
 } from "./action.js";
+import { randomUUID } from "crypto";
 
 export type AutonData<A extends Action = Action> = [SetPose & A, ...A[]];
 
@@ -96,31 +97,31 @@ export default class Auton<A extends Action = Action> {
   //   "body": "  static create$1(params: $1.Params): $1 {\nreturn { type: \"$2\", params };\n}"
   // }
   static createSetPose(params: SetPose.Params): SetPose {
-    return { type: "set_pose", params };
+    return { type: "set_pose", params, uuid: randomUUID() };
   }
   static createGoTo(params: MoveTo.Params): MoveTo {
-    return { type: "move_to", params };
+    return { type: "move_to", params, uuid: randomUUID() };
   }
   static createTurnTo(params: TurnTo.Params): TurnTo {
-    return { type: "turn_to", params };
+    return { type: "turn_to", params, uuid: randomUUID() };
   }
   static createFollow(params: Follow.Params): Follow {
-    return { type: "follow", params };
+    return { type: "follow", params, uuid: randomUUID() };
   }
   static createIntake(): Intake {
-    return { type: "intake", params: {} };
+    return { type: "intake", params: {}, uuid: randomUUID() };
   }
   static createStopIntake(): StopIntake {
-    return { type: "stop_intake", params: {} };
+    return { type: "stop_intake", params: {}, uuid: randomUUID() };
   }
   static createShoot(): Shoot {
-    return { type: "shoot", params: {} };
+    return { type: "shoot", params: {}, uuid: randomUUID() };
   }
   static createPistonShoot(): PistonShoot {
-    return { type: "piston_shoot", params: {} };
+    return { type: "piston_shoot", params: {}, uuid: randomUUID() };
   }
   static createExpand(): Expand {
-    return { type: "expand", params: {} };
+    return { type: "expand", params: {}, uuid: randomUUID() };
   }
 }
 
