@@ -267,7 +267,7 @@ export namespace Translation {
         .filter((e): e is ActionWithOffset => ActionTypeGuards.isAction(e));
     }
     export function translateDoc(doc: vscode.TextDocument): Auton<CppAction> {
-      let actionArr: CppAction[] = offsetToRange(
+      let actionArr: CppAction[] = upgradeOffsetActionToCpp(
         translateText(doc.getText()),
         doc
       );
@@ -308,7 +308,7 @@ export namespace Translation {
      * @param doc informs function how to transform the offsets
      * @returns transformed array
      */
-    export function offsetToRange(
+    export function upgradeOffsetActionToCpp(
       arr: ActionWithOffset[],
       doc: vscode.TextDocument
     ): CppAction[] {
@@ -425,14 +425,60 @@ export namespace Translation {
     export function translateAutonEdit(
       auton: Auton<ActionWithOffset>,
       doc: vscode.TextDocument,
-      edit: AutonEdit.AutonEdit<ActionWithOffset>,
-      workspaceEdit?: vscode.WorkspaceEdit
+      edit: AutonEdit.AutonEdit<Action>,
+      workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit()
     ): vscode.WorkspaceEdit {
+      const acts: Action[] = Array.isArray(edit.action)
+        ? edit.action
+        : [edit.action];
+      const adding: number = acts.length;
+      const removing: number = edit.count;
+
       return "" as unknown as vscode.WorkspaceEdit;
     }
-    const PARAM_PATTERN: RegExp =
-      /\(\?\<(?<type>int|string|float|bool)_(?<paramName>\w+)\>.+\)/;
-    export function generateTextForAction(action: Action, indent?: string): string {
+    /** 
+     * adds a replace {@link vscode.TextEdit TextEdit } to workspaceEdit that \t updates the params 
+     */
+    export function updateActionParams(
+      action: ActionWithOffset,
+      doc: vscode.TextDocument,
+      workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit()
+    ): vscode.WorkspaceEdit {
+      const currentText: string = doc.getText(
+        upgradeOffsetsToRange(action, doc)
+      );
+      Object.entries(action.groupIndices)
+        .filter(([group]) => !group.startsWith("_"))
+        // remove type from group and get param name
+        .map(([group, indices]): [string, [number, number]] => [
+          group.split("_").slice(1).join(""),
+          indices,
+        ])
+        .forEach(([group, [start, end]]) => {
+          const newText: string | undefined = action.params[group]?.toString();
+          if (
+            newText &&
+            newText !==
+              currentText.slice(start - action.offset, end - action.offset)
+          )
+            workspaceEdit.replace(
+              doc.uri,
+              upgradeOffsetsToRange(action, doc),
+              newText
+            );
+        });
+      return workspaceEdit;
+    }
+    /** 
+     * generates text for an action 
+     * @param indent specifies how the start of the string should be indented
+    */
+    export function generateTextForAction(
+      action: Action,
+      indent: string = "\t"
+    ): string {
+      const PARAM_PATTERN: RegExp =
+        /\(\?\<(?:int|string|float|bool)_(?<paramName>\w+)\>.+\)/;
       return CppToAuton.PATTERNS.PATTERNS.find((e) => e.name === action.type)!
         .pattern.composition.map((e): string => {
           let str: string;
@@ -440,29 +486,33 @@ export namespace Translation {
             if (e.separator === true)
               return e.separator + (e.str === "," ? " " : "");
             else if (e.control === true) return "";
-            else if (e.indent === true) return indent ?? "\9";
+            else if (e.indent === true) return indent;
             str = e.str;
           } else {
             str = e;
           }
-          if (PARAM_PATTERN.test(str)) {
-            const groups = PARAM_PATTERN.exec(str)!.groups!;
-            const name: string = groups.paramName;
-            const type: string = groups.paramName;
-            if (name in action.params)
-              switch (type) {
-                case "int":
-                case "float":
-                  return Number(action.params[name]).toString();
-                case "bool":
-                  return Boolean(action.params[name]).toString();
-                case "string":
-                  return action.params[name] as string;
-              }
-          }
+          const name: string | undefined =
+            PARAM_PATTERN.exec(str)?.groups?.paramName;
+          if (name && name in action.params)
+            return action.params[name]?.toString() ?? str;
           return str;
         })
         .join("");
+    }
+    export function upgradeOffsetsToRange(
+      {
+        offset,
+        endOffset,
+      }: {
+        offset: number;
+        endOffset: number;
+      },
+      doc: vscode.TextDocument
+    ): vscode.Range {
+      return new vscode.Range(
+        doc.positionAt(offset),
+        doc.positionAt(endOffset)
+      );
     }
   }
 }
