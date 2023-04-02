@@ -51,7 +51,7 @@ export namespace Translation {
 
       export const BLOCK_COMMENT: RegExp = /\/\*[\w\W]*?\*\//;
       /* matches spaces and newlines */
-      export const SPACE_AND_LINE: RegExp = /[\s\n]+/;
+      export const SPACE_AND_LINE: RegExp = /[\s\n]*?/;
       /** matches text that is ignored by the compiler */
       export const COMPILER_IGNORES: RegExp = new RegExp(
         `(?:${LINE_COMMENT.source}|${BLOCK_COMMENT.source}|${SPACE_AND_LINE.source})*`
@@ -216,11 +216,11 @@ export namespace Translation {
     }
 
     export function translateText(text: string): ActionWithOffset[] {
-      console.log({ PATTERNS });
-      return PATTERNS.PATTERNS.flatMap(({ pattern: { regex: pattern }, name }) =>
-        Array.from(text.matchAll(pattern)).map((match) => {
-          return { action: name, match };
-        })
+      return PATTERNS.PATTERNS.flatMap(
+        ({ pattern: { regex: pattern }, name }) =>
+          Array.from(text.matchAll(pattern)).map((match) => {
+            return { action: name, match };
+          })
       )
         .sort((a, b) => (a.match.index ?? 0) - (b.match.index ?? 0))
         .map(({ action, match }): ActionWithOffset => {
@@ -331,19 +331,27 @@ export namespace Translation {
       range2: { offset: number; endOffset: number }
     ): boolean {
       return (
-        Math.max(range1.offset, range2.offset) <
+        Math.max(range1.offset, range2.offset) <=
         Math.min(range1.endOffset, range2.endOffset)
       );
     }
 
     /**
-     * @returns edits made to auton by the change (Will modify auton!)
+     * modifies auton as specified by the document change event
+     * 
+     * @param auton modified by change
+     * @param change changes made to document
+     * @param oldDocText text of document before change
+     * 
+     * @returns edits made to auton by the change
      */
     export function changeAuton(
       auton: Auton<ActionWithOffset>,
-      change: vscode.TextDocumentChangeEvent
+      change: vscode.TextDocumentChangeEvent,
+      oldDocText: string
     ): AutonEdit.AutonEdit[] {
       let edits: AutonEdit.AutonEdit<ActionWithOffset>[] = [];
+      let docText: string = Array.from(oldDocText).join("");
 
       for (const contentChange of change.contentChanges) {
         const changeOffset: { offset: number; endOffset: number } = {
@@ -360,6 +368,7 @@ export namespace Translation {
         const lastAffectedIndex: number = auton.auton.findLastIndex((action) =>
           offsetOverlap(action, changeOffset)
         );
+
         // undefined when there is no overlap with any action
         const firstAffectedAction: ActionWithOffset | undefined =
           auton.auton[firstAffectedIndex];
@@ -370,25 +379,47 @@ export namespace Translation {
         // offset representing start of affectedText
         const affectedStart: number = firstAffectedAction
           ? Math.min(firstAffectedAction.offset, changeOffset.offset)
-          : changeOffset.offset;
+          : Math.min(
+              auton.auton.findLast((act) => act.endOffset < changeOffset.offset)
+                ?.endOffset ?? 0,
+              changeOffset.offset
+            );
         // offset representing end of affectedText
         const affectedEnd: number = lastAffectedAction
           ? Math.max(lastAffectedAction.endOffset, changeOffset.endOffset)
-          : changeOffset.endOffset;
+          : Math.max(
+              auton.auton.find((act) => act.offset > changeOffset.endOffset)
+                ?.offset ?? Infinity,
+              changeOffset.endOffset
+            );
 
         let affectedText: string = contentChange.text;
 
         // adds text that may be missing from contentChange.text to affectedText
-        if (affectedStart !== changeOffset.offset)
+        if (lastAffectedIndex === -1 && firstAffectedIndex === -1) {
+          const actionBeforeChangeEndOffset: number =
+            auton.auton.findLast((act) => act.endOffset < changeOffset.offset)
+              ?.endOffset ?? 0;
+          const actionAfterChangeStartOffset: number | undefined =
+            auton.auton.find(
+              (act) => act.offset > changeOffset.endOffset
+            )?.offset;
           affectedText =
-            firstAffectedAction!.text.slice(
-              0,
-              changeOffset.offset - firstAffectedAction!.offset
-            ) + affectedText;
-        if (affectedEnd !== changeOffset.endOffset)
-          affectedText += lastAffectedAction!.text.slice(
-            changeOffset.endOffset - lastAffectedAction!.endOffset
-          );
+            docText.slice(affectedStart, changeOffset.offset) +
+            affectedText +
+            docText.slice(changeOffset.endOffset, affectedEnd);
+        } else {
+          if (affectedStart !== changeOffset.offset)
+            affectedText =
+              firstAffectedAction!.text.slice(
+                0,
+                changeOffset.offset - firstAffectedAction!.offset
+              ) + affectedText;
+          if (affectedEnd !== changeOffset.endOffset)
+            affectedText += lastAffectedAction!.text.slice(
+              changeOffset.endOffset - lastAffectedAction!.endOffset
+            );
+        }
 
         const newActions: ActionWithOffset[] = translateSubString(
           affectedText,
@@ -396,7 +427,10 @@ export namespace Translation {
         );
         const edit: AutonEdit.Replace<ActionWithOffset> = {
           action: newActions,
-          count: lastAffectedIndex - firstAffectedIndex,
+          count:
+            lastAffectedIndex === -1 && firstAffectedIndex === -1
+              ? 0
+              : lastAffectedIndex - firstAffectedIndex + 1,
           index: firstAffectedAction
             ? firstAffectedIndex
             : auton.auton.findLastIndex(
@@ -406,18 +440,39 @@ export namespace Translation {
         // adjust offsets of all actions after edit
         const offsetAdjustment: number =
           contentChange.text.length - contentChange.rangeLength;
-        for (let i = edit.index + edit.count; i < auton.auton.length; i++) {
+        for (let i = edit.index + edit.count - 1; i < auton.auton.length; i++) {
+          if(i < 0) continue;
           auton.auton[i] = {
             ...auton.auton[i],
-            offset: auton.auton[i].offset + offsetAdjustment,
+            offset:
+              auton.auton[i].offset +
+              (auton.auton[i].offset >= changeOffset.endOffset
+                ? offsetAdjustment
+                : 0),
+            endOffset:
+              auton.auton[i].endOffset +
+              (auton.auton[i].endOffset > changeOffset.endOffset
+                ? offsetAdjustment
+                : 0),
           };
         }
+        // modify doc text
+        docText =
+          docText.slice(0, changeOffset.offset) +
+          contentChange.text +
+          docText.slice(changeOffset.endOffset);
 
         // add to output array
-        edits.push(edit);
+        if (
+          edit.count !== 0 ||
+          (Array.isArray(edit.action) && edit.action.length !== 0)
+        )
+          edits.push(edit);
         // perform edit
         auton.makeEdit(edit);
       }
+      console.log("action:", auton.auton.at(-1));
+      console.log({ change, auton: auton.auton, l: auton.auton.length });
       return edits;
     }
   }

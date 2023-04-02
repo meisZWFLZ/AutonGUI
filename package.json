@@ -15,7 +15,6 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
   "main": "./out/server/server/extension.js",
   "contributes": {
     "customEditors": [

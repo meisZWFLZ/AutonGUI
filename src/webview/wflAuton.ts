@@ -16,7 +16,7 @@ import { ListAction, LIST_ACTION_TYPE } from "../common/eventList.js";
 const vscode = acquireVsCodeApi();
 vscode.postMessage(new Message.ToExtension.Ready());
 
-window.addEventListener("message", console.log);
+// window.addEventListener("message", console.log);
 
 // class JSONConversions {
 //   static toUint8Array(obj: any): Uint8Array {

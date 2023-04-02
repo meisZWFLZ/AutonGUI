@@ -61,14 +61,15 @@ export default class Auton<A extends Action = Action> {
    */
   public replace({ action: _act, index, count }: AutonEdit.Replace<A>) {
     const acts: A[] = Array.isArray(_act) ? _act : [_act];
-    if (
-      index === 0 &&
-      !(
-        ActionTypeGuards.isSetPose(acts[0]) &&
-        CoordinateUtilities.isPosition(acts[0].params)
-      )
-    )
-      throw 'cannot put an action not of type "SetPose" in 0th index of auton';
+    // ignore for now as this should alert the user (todo)
+    // if (
+    //   index === 0 &&
+    //   !(
+    //     ActionTypeGuards.isSetPose(acts[0]) &&
+    //     CoordinateUtilities.isPosition(acts[0].params)
+    //   )
+    // )
+    //   throw 'cannot put an action not of type "SetPose" in 0th index of auton';
     this.auton.splice(index, count ?? acts.length, ...acts);
   }
   /**
@@ -88,7 +89,7 @@ export default class Auton<A extends Action = Action> {
     const edits: AutonEdit.AutonEdit<A>[] = Array.isArray(_edit)
       ? _edit
       : [_edit];
-    edits.forEach(this.replace);
+    edits.forEach(this.replace, this);
   }
 
   // if for some reason the create functions must be redone, I used this snippet:
