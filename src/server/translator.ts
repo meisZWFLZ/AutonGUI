@@ -26,23 +26,19 @@ export namespace Translation {
     export namespace PATTERNS {
       export type PatternComposition = (
         | string
-        | {
-            str: string;
-            separator?: boolean;
-            indent?: boolean;
-            control?: boolean;
-          }
+        | Param
+        | { separator: string }
+        | { indent: number }
       )[];
       export type Pattern = {
         regex: RegExp;
         composition: PatternComposition;
       };
-      export type Param = (
-        | { string: string }
-        | { bool: string }
-        | { int: string }
-        | { float: string }
-      ) & { opt?: boolean };
+      export type Param = {
+        paramName: string;
+        type: "string" | "bool" | "int" | "float";
+        opt?: boolean;
+      };
       export const FLOAT: RegExp = /(?:\d*\.)?\d+/;
       export const INT: RegExp = /\d+/;
       export const BOOLEAN: RegExp = /true|false|0|1/;
@@ -106,87 +102,106 @@ export namespace Translation {
        */
       export function func(funcName: string, params: Param[]): Pattern {
         let optStartIndex: number = params.length;
-        let composition: PatternComposition = [
-          {
-            str: `(?<=^(?:${SPACE_AND_LINE.source}|${BLOCK_COMMENT.source}))`,
-            indent: true,
-          },
-          "auton",
-          { str: "::", separator: true },
-          funcName,
-          { str: "\\(", separator: true },
+
+        /** pattern composition will be returned */
+        let composition: PatternComposition = [];
+
+        /** source of regex that will be returned */
+        let outSrc: string = "";
+
+        /** adds str only to outSrc (used for text that only makes sense in regex) */
+        function addRegex(str: string) {
+          outSrc += str;
+        }
+        /** adds comp only to composition (used for comps that only makes sense in composition) */
+        function addComp(...comp: PatternComposition) {
+          composition.push(...comp);
+        }
+        /** adds str to both composition and outSrc */
+        function add(str: string) {
+          addRegex(str);
+          addComp(str);
+        }
+        /**
+         * adds a separator to both composition and outSrc
+         * @param sep string equivalent to separator
+         * @param reg string that will be passed to {@link s()}
+         */
+        function addSep(sep: string, reg?: string) {
+          outSrc += s(reg ?? sep);
+          composition.push({ separator: sep });
+        }
+
+        addRegex(`(?<=^(?:${SPACE_AND_LINE.source}|${BLOCK_COMMENT.source}))`);
+        addComp({ indent: 1 });
+        add("auton");
+        addSep("::");
+        add(funcName);
+        addSep("(", "\\(");
+        addComp(...params);
+        addRegex(
           params
             .sort((a, b) => +(a.opt ?? 0) - +(b.opt ?? 0))
-            .map((param, i) => {
+            .map((param, i): string => {
               if (param.opt) optStartIndex = Math.min(optStartIndex, i);
               let out = "";
-              if ("string" in param) out = string(param.string);
-              else if ("bool" in param) out = bool(param.bool);
-              else if ("int" in param) out = int(param.int);
-              else if ("float" in param) out = float(param.float);
-              return [
-                param.opt
-                  ? {
-                      str: "(?:",
-                      control: true,
-                    }
-                  : "",
-                i > 0 ? { str: ",", separator: true } : "",
-                out,
-              ];
-            }),
-          new Array(params.length - optStartIndex).fill({
-            str: ")?",
-            control: true,
-          }),
-          { str: "\\)", separator: true },
-          ";",
-        ].flat(20 /* completely flatten */);
+              switch (param.type) {
+                case "string":
+                  out = string(param.paramName);
+                  break;
+                case "bool":
+                  out = bool(param.paramName);
+                  break;
+                case "int":
+                  out = int(param.paramName);
+                  break;
+                case "float":
+                  out = float(param.paramName);
+                  break;
+              }
+              return (param.opt ? "(?:" : "") + (i > 0 ? "," : "") + out;
+            })
+            .join("")
+        );
+        addRegex(")?".repeat(params.length - optStartIndex));
+        addSep(")", "\\)");
+        add(";");
         return {
-          regex: new RegExp(
-            composition
-              .map((e): string =>
-                typeof e == "object"
-                  ? e.separator === true
-                    ? s(e.str)
-                    : e.str
-                  : e
-              )
-              .join(""),
-            "dgm"
-          ),
+          regex: new RegExp(outSrc, "dgm"),
           composition,
         };
       }
       export const SET_POSE: Pattern = func("setPose", [
-        { float: "x" },
-        { float: "y" },
-        { float: "theta" },
-        { bool: "radians", opt: true },
+        { paramName: "x", type: "float" },
+        { paramName: "y", type: "float" },
+        { paramName: "heading", type: "float" },
+        { paramName: "radians", type: "bool", opt: true },
       ]);
       export const TURN_TO: Pattern = func("turnTo", [
-        { float: "x" },
-        { float: "y" },
-        { int: "timeout" },
-        { bool: "reversed", opt: true },
-        { float: "maxSpeed", opt: true },
-        { bool: "log", opt: true },
+        { paramName: "x", type: "float" },
+        { paramName: "y", type: "float" },
+        { paramName: "timeout", type: "int" },
+        { paramName: "reversed", type: "bool", opt: true },
+        { paramName: "maxSpeed", type: "float", opt: true },
+        { paramName: "log", type: "bool", opt: true },
       ]);
       export const MOVE_TO: Pattern = func("moveTo", [
-        { float: "x" },
-        { float: "y" },
-        { int: "timeout" },
-        { float: "maxSpeed", opt: true },
-        { bool: "log", opt: true },
+        { paramName: "x", type: "float" },
+        { paramName: "y", type: "float" },
+        { paramName: "timeout", type: "int" },
+        { paramName: "maxSpeed", type: "float", opt: true },
+        { paramName: "log", type: "bool", opt: true },
       ]);
       export const FOLLOW: Pattern = func("follow", [
-        { string: "filePath" },
-        { int: "timeout" },
-        { float: "lookahead" },
-        { float: "maxSpeed", opt: true },
-        { bool: "log", opt: true },
+        { paramName: "filePath", type: "string" },
+        { paramName: "timeout", type: "int" },
+        { paramName: "lookahead", type: "float" },
+        { paramName: "maxSpeed", type: "float", opt: true },
+        { paramName: "log", type: "bool", opt: true },
       ]);
-      export const WAIT: Pattern = func("wait", [{ int: "milliseconds" }]);
+      export const WAIT: Pattern = func("wait", [
+        { paramName: "milliseconds", type: "int" },
+      ]);
 
       // snippet:
       // "func": {
@@ -338,11 +353,11 @@ export namespace Translation {
 
     /**
      * modifies auton as specified by the document change event
-     * 
+     *
      * @param auton modified by change
      * @param change changes made to document
      * @param oldDocText text of document before change
-     * 
+     *
      * @returns edits made to auton by the change
      */
     export function changeAuton(
@@ -441,7 +456,7 @@ export namespace Translation {
         const offsetAdjustment: number =
           contentChange.text.length - contentChange.rangeLength;
         for (let i = edit.index + edit.count - 1; i < auton.auton.length; i++) {
-          if(i < 0) continue;
+          if (i < 0) continue;
           auton.auton[i] = {
             ...auton.auton[i],
             offset:
@@ -581,25 +596,22 @@ export namespace Translation {
       action: Action,
       indent: string = "\t"
     ): string {
-      const PARAM_PATTERN: RegExp =
-        /\(\?\<(?:int|string|float|bool)_(?<paramName>\w+)\>.+\)/;
+      let paramsLeft: number = Object.keys(action.params).length;
       return CppToAuton.PATTERNS.PATTERNS.find((e) => e.name === action.type)!
         .pattern.composition.map((e): string => {
-          let str: string;
           if (typeof e === "object") {
-            if (e.separator === true)
-              return e.separator + (e.str === "," ? " " : "");
-            else if (e.control === true) return "";
-            else if (e.indent === true) return indent;
-            str = e.str;
-          } else {
-            str = e;
+            if ("separator" in e) return e.separator;
+            if ("indent" in e) return "\t".repeat(e.indent);
+            if ("paramName" in e && e.paramName in action.params)
+              return (
+                (e.type == "string"
+                  ? `"${action.params[e.paramName]!.toString()}"`
+                  : action.params[e.paramName]!.toString()) +
+                (--paramsLeft > 0 ? ", " : "")
+              );
+            return "";
           }
-          const name: string | undefined =
-            PARAM_PATTERN.exec(str)?.groups?.paramName;
-          if (name && name in action.params)
-            return action.params[name]?.toString() ?? str;
-          return str;
+          return e;
         })
         .join("");
     }

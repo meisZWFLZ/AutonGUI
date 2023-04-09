@@ -11,6 +11,7 @@ import {
   Shoot,
   StopIntake,
   ActionTypeGuards,
+  Roller,
 } from "./action.js";
 import { randomUUID } from "crypto";
 
@@ -100,7 +101,7 @@ export default class Auton<A extends Action = Action> {
   static createSetPose(params: SetPose.Params): SetPose {
     return { type: "set_pose", params, uuid: randomUUID() };
   }
-  static createGoTo(params: MoveTo.Params): MoveTo {
+  static createMoveTo(params: MoveTo.Params): MoveTo {
     return { type: "move_to", params, uuid: randomUUID() };
   }
   static createTurnTo(params: TurnTo.Params): TurnTo {
@@ -123,6 +124,9 @@ export default class Auton<A extends Action = Action> {
   }
   static createExpand(): Expand {
     return { type: "expand", params: {}, uuid: randomUUID() };
+  }
+  static createRoller(): Roller {
+    return { type: "roller", params: {}, uuid: randomUUID() };
   }
 }
 
