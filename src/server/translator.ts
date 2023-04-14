@@ -159,7 +159,7 @@ export namespace Translation {
                   out = float(param.paramName);
                   break;
               }
-              return (param.opt ? "(?:" : "") + (i > 0 ? "," : "") + out;
+              return (param.opt ? "(?:" : "") + (i > 0 ? s(",") : "") + out;
             })
             .join("")
         );
