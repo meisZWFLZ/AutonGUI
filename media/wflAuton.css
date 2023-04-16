@@ -168,7 +168,7 @@ z-index:100;
   /* -webkit-mask: url("./actionIcons/shoot.svg") no-repeat 50% 50%; */
 }
 .actions button.piston_shoot {
-  background: url("./actionIcons/pistonShoot.svg") no-repeat 50% 50%;
+  background: url("./actionIcons/piston_shoot.svg") no-repeat 50% 50%;
 }
 .actions button.roller {
   background: url("./actionIcons/roller.svg") no-repeat 50% 50%;

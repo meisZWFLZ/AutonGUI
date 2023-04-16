@@ -12,29 +12,37 @@ import {
   StopIntake,
   ActionTypeGuards,
   Roller,
+  BaseAction,
 } from "./action.js";
 import { randomUUID } from "crypto";
 
-export type AutonData<A extends Action = Action> = [SetPose & A, ...A[]];
+export type AutonData<A extends BaseAction<{}> = Action> = [
+  SetPose & A,
+  ...A[]
+];
 
-export default class Auton<A extends Action = Action> {
+export default class Auton<A extends BaseAction<{}> = Action> {
   protected _auton: AutonData<A>;
 
   constructor(startPos: SetPose & A, actions: A[] = []) {
     this._auton = [startPos, ...actions];
   }
 
-  public get auton(): AutonData<A> {
+  public onModified?: () => void;
+
+  public get auton(): Readonly<AutonData<A>> {
     return this._auton;
   }
-  public set auton(auton: AutonData<A>) {
-    this._auton = auton;
-  }
+  // public set auton(auton: AutonData<A>) {
+  //   this._auton = auton;
+  //   this.onModified?.();
+  // }
   public setStartPos(startPos: Position) {
-    this.auton[0] = {
+    this._auton[0] = {
       ...this.auton[0],
       params: { ...this.auton[0].params, ...startPos },
     };
+    this.onModified?.();
   }
   public getStartPos(): Position {
     return this.auton[0].params;
@@ -48,7 +56,7 @@ export default class Auton<A extends Action = Action> {
   public insert({ action: _act, index, count = 0 }: AutonEdit.Insert<A>) {
     const acts: A[] = Array.isArray(_act) ? _act : [_act];
     if (
-      index === 0 &&
+      index == 0 &&
       !(
         ActionTypeGuards.isSetPose(acts[0]) ||
         CoordinateUtilities.isPosition(acts[0].params)
@@ -71,14 +79,32 @@ export default class Auton<A extends Action = Action> {
     //   )
     // )
     //   throw 'cannot put an action not of type "SetPose" in 0th index of auton';
-    this.auton.splice(index, count ?? acts.length, ...acts);
+    this._auton.splice(index, count ?? acts.length, ...acts);
+    this.onModified?.();
   }
   /**
    * @throws will throw if removing 0th element
    */
   public remove({ index, count = 1, action = [] }: AutonEdit.Remove) {
-    if (index === 0) throw "cannot remove the 0th element of auton";
+    if (index == 0) throw "cannot remove the 0th element of auton";
     this.replace({ index, count, action });
+  }
+  /**
+   * @throws will throw if modifying 0th element's params to a non positional type
+   */
+  public modify(mod: AutonEdit.Modify<A>) {
+    const index: number =
+      "index" in mod
+        ? mod.index
+        : this.auton.findIndex(({ uuid }) => uuid === mod.uuid);
+    if (
+      index != 0 ||
+      !("params" in mod) ||
+      CoordinateUtilities.isPosition(mod.newProperties.params)
+    )
+      this._auton[index] = { ...this.auton[index], ...mod.newProperties };
+    else throw "cannot set start position to non positional type";
+    this.onModified?.();
   }
   /**
    * @description performs edits starting from the 0th index
@@ -90,7 +116,13 @@ export default class Auton<A extends Action = Action> {
     const edits: AutonEdit.AutonEdit<A>[] = Array.isArray(_edit)
       ? _edit
       : [_edit];
-    edits.forEach(this.replace, this);
+    edits.forEach((edit) => {
+      if (AutonEdit.TypeGuards.isModify(edit)) this.modify(edit);
+      else if (AutonEdit.TypeGuards.isReplace(edit)) this.replace(edit);
+      else {
+        //throw?
+      }
+    });
   }
 
   // if for some reason the create functions must be redone, I used this snippet:
@@ -128,6 +160,12 @@ export default class Auton<A extends Action = Action> {
   static createRoller(): Roller {
     return { type: "roller", params: {}, uuid: randomUUID() };
   }
+  /**
+   * @returns a new auton starting at the origin
+   */
+  static newAutonAtOrigin() {
+    return new Auton(Auton.createSetPose({ x: 0, y: 0, heading: 0 }));
+  }
 }
 
 export namespace AutonEdit {
@@ -141,7 +179,7 @@ export namespace AutonEdit {
   /**
    * @warn if index is zero, oth element of action must be {@link SetPose}
    */
-  export interface Insert<A extends Action> extends Replace<A> {
+  export interface Insert<A extends BaseAction<{}>> extends Replace<A> {
     // readonly type: "insert";
     readonly action: A | A[];
     readonly index: number;
@@ -150,7 +188,7 @@ export namespace AutonEdit {
   /**
    * @warn if index is zero, 0th element of action must be {@link SetPose}
    */
-  export interface Replace<A extends Action> {
+  export interface Replace<A extends BaseAction<{}>> {
     readonly action: A | A[];
     readonly index: number;
     /**
@@ -166,5 +204,44 @@ export namespace AutonEdit {
     readonly index: number;
     readonly count: number;
   }
-  export type AutonEdit<A extends Action = Action> = Replace<A>;
+  /**
+   * @warn if index or uuid refers to the first element and modifies params, then params must be of type Position
+   */
+  export type Modify<A extends BaseAction<{}>> = {
+    readonly newProperties: Partial<Omit<A, "type" | "uuid">>;
+  } & ({ readonly index: number } | { readonly uuid: A["uuid"] });
+
+  export type AutonEdit<A extends BaseAction<{}> = Action> =
+    | Replace<A>
+    | Modify<A>;
+
+  export namespace TypeGuards {
+    function isNonNullObject(obj: unknown): obj is NonNullable<Object> {
+      return typeof obj == "object" && obj !== null;
+    }
+    export function isModify(obj: unknown): obj is Modify<any> {
+      return (
+        isNonNullObject(obj) &&
+        "newProperties" in obj &&
+        isNonNullObject(obj.newProperties) &&
+        (("index" in obj && Number.isInteger(obj.index)) ||
+          ("uuid" in obj && typeof obj.uuid === "string")) &&
+        !isReplace(obj)
+      );
+    }
+    export function isReplace(obj: unknown): obj is Replace<any> {
+      return (
+        isNonNullObject(obj) &&
+        "action" in obj &&
+        (Array.isArray(obj.action)
+          ? obj.action.every(ActionTypeGuards.isAction)
+          : ActionTypeGuards.isAction(obj.action)) &&
+        "index" in obj &&
+        Number.isInteger(obj.index) &&
+        "count" in obj &&
+        Number.isInteger(obj.count) &&
+        !isModify(obj)
+      );
+    }
+  }
 }

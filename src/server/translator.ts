@@ -455,21 +455,20 @@ export namespace Translation {
         // adjust offsets of all actions after edit
         const offsetAdjustment: number =
           contentChange.text.length - contentChange.rangeLength;
+        const offsetAdjustMods: AutonEdit.Modify<CppAction>[] = [];
         for (let i = edit.index + edit.count - 1; i < auton.auton.length; i++) {
           if (i < 0) continue;
-          auton.auton[i] = {
-            ...auton.auton[i],
-            offset:
-              auton.auton[i].offset +
-              (auton.auton[i].offset >= changeOffset.endOffset
-                ? offsetAdjustment
-                : 0),
-            endOffset:
-              auton.auton[i].endOffset +
-              (auton.auton[i].endOffset > changeOffset.endOffset
-                ? offsetAdjustment
-                : 0),
-          };
+          let newProperties: { offset?: number; endOffset?: number } = {};
+          if (auton.auton[i].offset >= changeOffset.endOffset)
+            newProperties.offset = auton.auton[i].offset + offsetAdjustment;
+          if (auton.auton[i].endOffset > changeOffset.endOffset)
+            newProperties.endOffset =
+              auton.auton[i].endOffset + offsetAdjustment;
+          if (newProperties.offset || newProperties.endOffset)
+            offsetAdjustMods.push({
+              index: i,
+              newProperties,
+            });
         }
         // modify doc text
         docText =
@@ -484,7 +483,7 @@ export namespace Translation {
         )
           edits.push(edit);
         // perform edit
-        auton.makeEdit(edit);
+        auton.makeEdit([...offsetAdjustMods, edit]);
       }
       console.log("action:", auton.auton.at(-1));
       console.log({ change, auton: auton.auton, l: auton.auton.length });
@@ -501,16 +500,28 @@ export namespace Translation {
       edit: AutonEdit.AutonEdit<Action>,
       workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit()
     ): vscode.WorkspaceEdit {
-      /** actions in auton that will be modified or deleted by the edit */
-      const affectedAutonActs = auton.auton.slice(
-        edit.index,
-        edit.index + edit.count
-      );
-      /** new acts in edit */
-      const editActs: Action[] = Array.isArray(edit.action)
-        ? edit.action
-        : [edit.action];
+      const isReplace = AutonEdit.TypeGuards.isReplace(edit);
+      const isModify = AutonEdit.TypeGuards.isModify(edit);
+      if (!isReplace && !isModify) return workspaceEdit;
 
+      const editIndex =
+        "index" in edit
+          ? edit.index
+          : auton.auton.findIndex(({ uuid }) => uuid === edit.uuid);
+      if (editIndex < 0) return workspaceEdit;
+
+      /** actions in auton that will be modified or deleted by the edit */
+      const affectedAutonActs: ActionWithOffset[] = isReplace
+        ? auton.auton.slice(edit.index, edit.index + edit.count)
+        : [auton.auton[editIndex]];
+
+      /** new acts in edit */
+      const editActs: Action[] = isReplace
+        ? Array.isArray(edit.action)
+          ? edit.action
+          : [edit.action]
+        : // { ...this.auton[index], ...mod.newProperties }
+          [{ ...affectedAutonActs[0], ...edit.newProperties } as Action];
       // removes text associated with the actions that will be deleted
       for (const deletedAct of affectedAutonActs
         // if action is modified, we do not want to remove it
@@ -524,7 +535,7 @@ export namespace Translation {
         workspaceEdit.delete(doc.uri, upgradeOffsetsToRange(deletedAct, doc));
 
       /** where should the next edit be written (used for new actions) */
-      let writeOffset: number = auton.auton.at(edit.index)?.offset ?? 0;
+      let writeOffset: number = auton.auton.at(editIndex)?.offset ?? 0;
 
       // either modify or create new action
       for (const newAct of editActs) {

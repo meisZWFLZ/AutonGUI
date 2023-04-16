@@ -1,10 +1,21 @@
 import * as vscode from "vscode";
 // import { CatScratchEditorProvider } from './catScratchEditor';
 import { AutonEditorProvider } from "./autonEditor";
+import { AutonTreeProvider } from "./autonView";
 
 export function activate(context: vscode.ExtensionContext) {
+  let autonView: AutonTreeProvider = new AutonTreeProvider(context);
+
+  context.subscriptions.push(
+    vscode.window.registerTreeDataProvider("vrc-auton.list-view", autonView)
+  );
+  vscode.commands.registerCommand("vrc-auton.list-view.refresh", () =>
+    autonView.refresh()
+  );
   // Register our custom editor providers
-  context.subscriptions.push(...AutonEditorProvider.register(context));
+  context.subscriptions.push(
+    ...AutonEditorProvider.register(context , autonView)
+  );
   function isCpp(
     input: vscode.TextEditor | vscode.TextDocument | vscode.Uri | undefined
   ): boolean {
@@ -14,6 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
       else if ("toString" in input) return input.toString().endsWith(".cpp");
     return false;
   }
+
   const getDocumentSelector = (): vscode.DocumentSelector =>
     (
       vscode.workspace
@@ -83,72 +95,6 @@ export function activate(context: vscode.ExtensionContext) {
       !!document && vscode.languages.match(getDocumentSelector(), document) > 0
     );
   }
-
-  function onDidChangeActiveTextEditor(
-    textEditor: vscode.TextEditor | undefined
-  ): void {
-    // if (isCpp(textEditor)) console.log("enable");
-    // else console.log("disable");
-
-    inAutonDirectory(textEditor?.document);
-    // console.log("onDidChangeActiveTextEditor" /* textEditor */);
-  }
-
-  context.subscriptions.push(
-    vscode.commands.registerCommand(
-      "vrc-auton.builder.show",
-      async (uri: vscode.Uri) => {
-        // const actualUri = uri || vscode.window.activeTextEditor?.document.uri;
-        // // if (isCpp(actualUri)) console.log("enable");
-        // // else console.log("disable");
-        // console.log("command:vrc-auton.builder.show", actualUri);
-      }
-    )
-  );
-
-  context.subscriptions.push(
-    vscode.commands.registerTextEditorCommand(
-      "vrc-auton.builder.showToSide",
-      async (textEditor) => {
-        // if (isCpp(textEditor)) console.log("enable");
-        // else console.log("disable");
-        // console.log("command:vrc-auton.builder.showToSide", textEditor);
-      }
-    )
-  );
-
-  context.subscriptions.push(
-    vscode.window.onDidChangeActiveTextEditor(onDidChangeActiveTextEditor)
-  );
-
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeTextDocument(
-      (event: vscode.TextDocumentChangeEvent) => {
-        // if (isCpp(event.document)) console.log("enable");
-        // else console.log("disable");
-        event.contentChanges;
-        inAutonDirectory(event.document);
-        // console.log("onDidChangeTextDocument" /* event */);
-      }
-    )
-  );
-
-  context.subscriptions.push(
-    vscode.window.onDidChangeTextEditorSelection(
-      (event: vscode.TextEditorSelectionChangeEvent) => {
-        // if (isCpp(event.textEditor)) console.log("enable");
-        // else console.log("disable");
-        inAutonDirectory(event.textEditor.document);
-        // console.log("onDidChangeTextEditorSelection" /* event */);
-      }
-    )
-  );
-
-  vscode.workspace.onDidChangeTextDocument;
-
-  // context.subscriptions.push(
-  //   vscode.window.registerWebviewPanelSerializer('svgPreview', previewPanel)
-  // )
 }
 /**
  * Deactivate the extension.

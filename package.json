@@ -17,6 +17,23 @@
   ],
   "main": "./out/server/server/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "auton-list-container",
+          "title": "Auton",
+          "icon": "media/robot.svg"
+        }
+      ]
+    },
+    "views": {
+      "auton-list-container": [
+        {
+          "id": "vrc-auton.list-view",
+          "name": "List"
+        }
+      ]
+    },
     "customEditors": [
       {
         "viewType": "vrc-auton.builder",
@@ -46,6 +63,11 @@
     },
     "commands": [
       {
+        "command": "vrc-auton.list-view.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "vrc-auton.builder.show",
         "title": "Show Auton Builder",
         "category": "Auton Builder",
@@ -65,6 +87,13 @@
       }
     ],
     "menus": {
+      "view/title": [
+        {
+          "command": "vrc-auton.list-view.refresh",
+          "when": "view == vrc-auton.list-view",
+          "group": "navigation"
+        }
+      ],
       "editor/context": [
         {
           "when": "editorTextFocus && resourceFilename =~ /^.*\\.cpp$/ && resourcePath not in vrc-auton.builder.visible && resourceDirname in vrc-auton.autonDirs",

@@ -3,6 +3,7 @@ import { getNonce } from "./util";
 import Message from "../common/message";
 import Auton from "../common/auton";
 import { Translation } from "./translator";
+import { AutonTreeProvider } from "./autonView";
 
 type CppAuton = Auton<Translation.CppAction>;
 type DocumentInfo = {
@@ -30,9 +31,10 @@ type DocumentInfo = {
 export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   private static readonly viewType = "vrc-auton.builder";
   private static provider: AutonEditorProvider;
-
+  private static autonView: AutonTreeProvider;
   public static register(
-    context: vscode.ExtensionContext
+    context: vscode.ExtensionContext,
+    autonView: AutonTreeProvider
   ): vscode.Disposable[] {
     this.provider = new AutonEditorProvider(context);
     const providerRegistration = vscode.window.registerCustomEditorProvider(
@@ -42,6 +44,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     const docInfoRemover = vscode.workspace.onDidCloseTextDocument((doc) =>
       this.provider.deleteDocInfo(doc)
     );
+    this.autonView = autonView;
     return [providerRegistration, docInfoRemover];
   }
 
@@ -92,10 +95,14 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
 
   /** gets auton associated with document */
   protected getAuton(doc: vscode.TextDocument): CppAuton {
-    return this.getDocInfo(doc).auton;
+    // console.log("GET AUTON")
+    return /* AutonEditorProvider.autonView.setAuton( */ this.getDocInfo(doc)
+      .auton /* ) */;
   }
   /** sets auton associated with document */
   protected setAuton(doc: vscode.TextDocument, auton: CppAuton): CppAuton {
+    console.log("SET AUTON");
+    // AutonEditorProvider.autonView.setAuton(auton);
     const uri = doc.uri.toString();
     const info = this.documentInfo[uri];
     if (info !== undefined && typeof info === "object") info.auton = auton;
@@ -153,15 +160,17 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       this.editorProvider.postMessage(
         webviewPanel,
         new Message.ToWebview.AutonUpdate(
-          this.editorProvider.setAuton(
-            document,
-            AutonEditorProvider.translateDoc(document)
+          AutonEditorProvider.autonView.setAuton(
+            this.editorProvider.setAuton(
+              document,
+              AutonEditorProvider.translateDoc(document)
+            )
           ),
           0
         )
       );
       // console.log({ setAuton: this.editorProvider.getAuton(document) });
-      Translation.AutonToCpp.generateTextForAction(Auton.createIntake());
+      // Translation.AutonToCpp.generateTextForAction(Auton.createIntake());
     }
     onUpdateIndex({
       webviewPanel,

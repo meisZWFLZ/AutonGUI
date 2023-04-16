@@ -287,21 +287,33 @@ class CoordinateUtilities {
   ): number {
     return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
   }
-  static hasMarginOfError(obj: any): obj is HasMarginOfError {
-    return "marginOfError" in obj && typeof obj.marginOfError == "number";
+  private static isNonNullObject(obj: unknown): obj is NonNullable<Object> {
+    return typeof obj == "object" && obj !== null;
   }
-  static isCoordinate(obj: any): obj is Coordinate {
+  static hasMarginOfError(obj: unknown): obj is HasMarginOfError {
     return (
-      "x" in obj &&
-      "y" in obj &&
-      typeof obj.x == "number" &&
-      typeof obj.y == "number"
+      this.isNonNullObject(obj) &&
+      "marginOfError" in obj &&
+      Number.isFinite(obj.marginOfError)
     );
   }
-  static isRotatable(obj: any): obj is Rotatable {
-    return "heading" in obj && typeof obj.heading == "number";
+  static isCoordinate(obj: unknown): obj is Coordinate {
+    return (
+      this.isNonNullObject(obj) &&
+      "x" in obj &&
+      "y" in obj &&
+      Number.isFinite(obj.x) &&
+      Number.isFinite(obj.y)
+    );
   }
-  static isPosition(obj: any): obj is Position {
+  static isRotatable(obj: unknown): obj is Rotatable {
+    return (
+      this.isNonNullObject(obj) &&
+      "heading" in obj &&
+      Number.isFinite(obj.heading)
+    );
+  }
+  static isPosition(obj: unknown): obj is Position {
     return this.isCoordinate(obj) && this.isRotatable(obj);
   }
 }
