@@ -1,7 +1,11 @@
 import * as vscode from "vscode";
 import { ThemeIcon } from "vscode";
-import { Action } from "../common/action";
-import Auton, { AutonEdit } from "../common/auton";
+import {
+  Action, SetPose,
+  MoveTo, TurnTo,
+  Follow, Wait
+} from "../common/action";
+import Auton from "../common/auton";
 
 export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItem> {
   private _onDidChangeTreeData: vscode.EventEmitter<
@@ -60,55 +64,165 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItem> {
   }
 }
 
+/** makes some of Type's member required  */
+type RequireSome<Type, RequiredMembers extends keyof Type> = Partial<
+  Omit<Type, RequiredMembers>
+> &
+  Required<Pick<Type, RequiredMembers>>;
+/** function with return type T or value with type t*/
+type FunctionOrT<T, FuncParam> =
+  | ((
+      ...params: FuncParam extends Array<unknown> ? FuncParam : [FuncParam]
+    ) => T)
+  | T;
+
+type ActionToTreeItemMap<A extends Action> = {
+  readonly [P in A["type"]]: {
+    readonly [K in keyof Omit<TreeItemProperties, "id">]: FunctionOrT<
+      TreeItemProperties[K],
+      [
+        Extract<A, { type: P }>,
+        TreeItemProperties[K] extends vscode.Uri ? vscode.Uri : never
+      ]
+    >;
+  };
+};
+const basicActionIconPath: (act: Action, extUri: vscode.Uri) => vscode.Uri = (
+  act: Action,
+  extUri: vscode.Uri
+) => vscode.Uri.joinPath(extUri, "media", "actionIcons", `${act.type}.svg`);
+
+const actionToTreeItem: ActionToTreeItemMap<Action> = {
+  set_pose: {
+    label: ({ params: { x, y, heading, radians } }: SetPose) => {
+      return `Set Pose: (${x}, ${y}, ${heading}${radians ? "rad" : "°"})`;
+    },
+    iconPath: new ThemeIcon("plus"),
+  },
+  move_to: {
+    label: ({ params: { x, y, timeout, maxSpeed, log } }: MoveTo) => {
+      return `Move To: (${x}, ${y}), ${timeout}ms${
+        maxSpeed ? `, ${maxSpeed}${log ? ", true" : ""}` : ""
+      }`;
+    },
+    iconPath: new ThemeIcon("move"),
+  },
+  turn_to: {
+    label: ({ params: { x, y, timeout, reversed, maxSpeed, log } }: TurnTo) =>
+      `Turn ${reversed ? "Away" : "To"}: (${x}, ${y}), ${timeout}ms${
+        maxSpeed ? `, ${maxSpeed}${log ? ", true" : ""}` : ""
+      }`,
+  },
+  follow: {
+    label: ({
+      params: { filePath, timeout, lookahead, reverse, maxSpeed, log },
+    }: Follow) =>
+      `Follow: ${filePath}, ${timeout}ms, ${lookahead}in${
+        reverse !== undefined
+          ? `, true${
+              maxSpeed !== undefined
+                ? `, ${maxSpeed}${log ? ", true" : ""}`
+                : ""
+            }`
+          : ""
+      }`,
+    iconPath: new ThemeIcon("git-branch"),
+  },
+  roller: {
+    label: "Roller",
+    iconPath: (act: Action, extUri: vscode.Uri) =>
+      vscode.Uri.joinPath(extUri, "media", "actionIcons", `${act.type}.svg`),
+  },
+  expand: { label: "Expand", iconPath: basicActionIconPath },
+  shoot: { label: "Shoot", iconPath: basicActionIconPath },
+  piston_shoot: { label: "Piston Shoot", iconPath: basicActionIconPath },
+  intake: { label: "Intake", iconPath: basicActionIconPath },
+  stop_intake: { label: "Stop Intake", iconPath: basicActionIconPath },
+  wait: {
+    label: ({ params: { milliseconds } }: Wait) => `Wait: ${milliseconds}ms`,
+    iconPath: new ThemeIcon("clock"),
+  },
+};
+
+type TreeItemProperties = RequireSome<
+  { [K in keyof vscode.TreeItem]: vscode.TreeItem[K] },
+  "label"
+> & { children?: (TreeItem | TreeItemProperties)[] };
+
 class TreeItem extends vscode.TreeItem {
   children: TreeItem[] | undefined;
 
-  public static fromAction(action: Action, context: vscode.ExtensionContext) {
-    let iconPath: string | vscode.Uri | vscode.ThemeIcon = "";
-    switch (action.type) {
-      case "expand":
-      case "roller":
-      case "intake":
-      case "stop_intake":
-      case "shoot":
-      case "piston_shoot":
-        iconPath = vscode.Uri.joinPath(
-          context.extensionUri,
-          "media",
-          "actionIcons",
-          `${action.type}.svg`
-        );
-        break;
-      case "follow":
-        iconPath = new ThemeIcon("git-branch");
-        break;
-      case "move_to":
-        iconPath = new ThemeIcon("move");
-        break;
-      case "turn_to":
-        iconPath = new ThemeIcon("debug_restart");
-        break;
-      case "wait":
-        iconPath = new ThemeIcon("clock");
-        break;
-      case "set_pose":
-        iconPath = new ThemeIcon("plus");
-        break;
-      default:
-        iconPath = action;
+  public static fromAction<A extends Action["type"]>(
+    action: Extract<Action, { type: A }>,
+    context: vscode.ExtensionContext
+  ) {
+    // let iconPath: string | vscode.Uri | vscode.ThemeIcon = "";
+    // switch (action.type) {
+    //   case "expand":
+    //   case "roller":
+    //   case "intake":
+    //   case "stop_intake":
+    //   case "shoot":
+    //   case "piston_shoot":
+    //     iconPath = vscode.Uri.joinPath(
+    //       context.extensionUri,
+    //       "media",
+    //       "actionIcons",
+    //       `${action.type}.svg`
+    //     );
+    //     break;
+    //   case "follow":
+    //     iconPath = new ThemeIcon("git-branch");
+    //     break;
+    //   case "move_to":
+    //     iconPath = new ThemeIcon("move");
+    //     break;
+    //   case "turn_to":
+    //     iconPath = new ThemeIcon("debug-restart");
+    //     break;
+    //   case "wait":
+    //     iconPath = new ThemeIcon("clock");
+    //     break;
+    //   case "set_pose":
+    //     iconPath = new ThemeIcon("plus");
+    //     break;
+    //   default:
+    //     iconPath = action;
+    // }
+    // return new TreeItem({
+    //   label: action.type.replaceAll(
+    //     /(^|_)([a-z])/g,
+    //     (_idc, startOrUnderscore: string, letter: string): string => {
+    //       return (
+    //         (startOrUnderscore.length > 0 ? " " : "") + letter.toUpperCase()
+    //       );
+    //     }
+    //   ),
+    //   ...(iconPath ? { iconPath } : {}),
+    //   id: action.uuid,
+    // });
+    const rawTreeItemProps = actionToTreeItem[action.type as A];
+
+    let treeItemProps: Partial<TreeItemProperties> = { id: action.uuid };
+    for (const property of Object.keys(rawTreeItemProps) as Array<
+      keyof typeof rawTreeItemProps
+    >) {
+      const value = rawTreeItemProps[property];
+      if (value !== undefined) {
+        treeItemProps[property as keyof Omit<TreeItemProperties, "id">] =
+          typeof value == "function"
+            ? value(
+                action,
+                ["iconPath", "resourceUri"].includes(
+                  property as keyof Omit<TreeItemProperties, "id">
+                )
+                  ? context.extensionUri
+                  : undefined
+              )
+            : value;
+      }
     }
-    return new TreeItem({
-      label: action.type.replaceAll(
-        /(^|_)([a-z])/g,
-        (_idc, startOrUnderscord: string, letter: string): string => {
-          return (
-            (startOrUnderscord.length > 0 ? " " : "") + letter.toUpperCase()
-          );
-        }
-      ),
-      ...(iconPath ? { iconPath } : {}),
-      id: action.uuid,
-    });
+    return new TreeItem(treeItemProps as TreeItemProperties);
   }
   /** produces an array of tree items representing the auton */
   public static fromAuton(
@@ -130,30 +244,16 @@ class TreeItem extends vscode.TreeItem {
     id,
     resourceUri,
     tooltip,
-  }: {
-    accessibilityInformation?: vscode.AccessibilityInformation;
-    collapsibleState?: vscode.TreeItemCollapsibleState;
-    command?: vscode.Command;
-    contextValue?: string;
-    description?: string | boolean;
-    iconPath?:
-      | string
-      | vscode.Uri
-      | vscode.ThemeIcon
-      | { dark: string | vscode.Uri; light: string | vscode.Uri };
-    id?: string;
-    label: string | vscode.TreeItemLabel;
-    resourceUri?: vscode.Uri;
-    tooltip?: string | vscode.MarkdownString;
-    children?: TreeItem[];
-  }) {
+  }: TreeItemProperties) {
     super(
       label,
       children === undefined
         ? vscode.TreeItemCollapsibleState.None
         : vscode.TreeItemCollapsibleState.Expanded
     );
-    this.children = children;
+    this.children = children?.map((e) =>
+      e instanceof TreeItem ? e : new TreeItem(e)
+    );
 
     if (accessibilityInformation)
       this.accessibilityInformation = accessibilityInformation;

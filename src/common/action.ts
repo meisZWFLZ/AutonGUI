@@ -1,7 +1,7 @@
 import { Position } from "./coordinates";
 
 export namespace BaseAction {
-  export type Params = { [k: string]: boolean | number | string | undefined };
+  export type Params = {};
 }
 /**
  * @interface Action an action that can be performed by the robot
@@ -21,7 +21,7 @@ export interface BaseAction<P extends BaseAction.Params> {
 }
 
 export namespace SetPose {
-  export type Params = Position;
+  export type Params = Position & {radians?: boolean};
 }
 export interface SetPose
   extends BaseAction<SetPose.Params & BaseAction.Params> {

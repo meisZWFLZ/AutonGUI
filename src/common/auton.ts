@@ -13,6 +13,7 @@ import {
   ActionTypeGuards,
   Roller,
   BaseAction,
+  Wait,
 } from "./action.js";
 import { randomUUID } from "crypto";
 
@@ -130,6 +131,8 @@ export default class Auton<A extends BaseAction<{}> = Action> {
   //   "prefix": "act",
   //   "body": "  static create$1(params: $1.Params): $1 {\nreturn { type: \"$2\", params };\n}"
   // }
+
+  // probably should replace '.Params' with '["params"]'
   static createSetPose(params: SetPose.Params): SetPose {
     return { type: "set_pose", params, uuid: randomUUID() };
   }
@@ -141,6 +144,9 @@ export default class Auton<A extends BaseAction<{}> = Action> {
   }
   static createFollow(params: Follow.Params): Follow {
     return { type: "follow", params, uuid: randomUUID() };
+  }
+  static createWait(params: Wait.Params): Wait {
+    return { type: "wait", params, uuid: randomUUID() };
   }
   static createIntake(): Intake {
     return { type: "intake", params: {}, uuid: randomUUID() };

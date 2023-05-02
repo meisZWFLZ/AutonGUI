@@ -261,14 +261,18 @@ export namespace Translation {
                       let trueValue: boolean | string | number;
                       switch (type) {
                         case "bool":
-                          trueValue = Boolean(value);
+                          trueValue = (value === "true");
+                          break;
                         case "string":
                           trueValue = String(value);
+                          break;
                         case "int":
                         case "float":
                           trueValue = Number(value);
+                          break;
                         default:
                           trueValue = value as never;
+                          break;
                       }
                       return [[name, trueValue]];
                     }
@@ -585,7 +589,11 @@ export namespace Translation {
           indices,
         ])
         .forEach(([group, [start, end]]) => {
-          const newText: string | undefined = action.params[group]?.toString();
+          const newText: string | undefined = (
+            action.params as {
+              [k: string]: boolean | number | string | undefined;
+            }
+          )[group]?.toString();
           if (
             newText &&
             newText !==
@@ -607,6 +615,9 @@ export namespace Translation {
       action: Action,
       indent: string = "\t"
     ): string {
+      let actionParamsAsMap = action.params as {
+        [k: string]: boolean | number | string | undefined;
+      };
       let paramsLeft: number = Object.keys(action.params).length;
       return CppToAuton.PATTERNS.PATTERNS.find((e) => e.name === action.type)!
         .pattern.composition.map((e): string => {
@@ -616,8 +627,8 @@ export namespace Translation {
             if ("paramName" in e && e.paramName in action.params)
               return (
                 (e.type == "string"
-                  ? `"${action.params[e.paramName]!.toString()}"`
-                  : action.params[e.paramName]!.toString()) +
+                  ? `"${actionParamsAsMap[e.paramName]!.toString()}"`
+                  : actionParamsAsMap[e.paramName]!.toString()) +
                 (--paramsLeft > 0 ? ", " : "")
               );
             return "";
