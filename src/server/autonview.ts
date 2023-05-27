@@ -1,13 +1,22 @@
 import * as vscode from "vscode";
 import { ThemeIcon } from "vscode";
 import {
-  Action, SetPose,
-  MoveTo, TurnTo,
-  Follow, Wait
+  Action,
+  SetPose,
+  MoveTo,
+  TurnTo,
+  Follow,
+  Wait,
+  BaseAction,
 } from "../common/action";
-import Auton from "../common/auton";
+import Auton, { AutonEdit } from "../common/auton";
+import { isNativeError } from "util/types";
 
-export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItem> {
+export class AutonTreeProvider
+  implements
+    vscode.TreeDataProvider<TreeItem>,
+    vscode.TreeDragAndDropController<TreeItem>
+{
   private _onDidChangeTreeData: vscode.EventEmitter<
     TreeItem | undefined | void
   > = new vscode.EventEmitter<TreeItem | undefined | void>();
@@ -21,11 +30,10 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItem> {
   private data: TreeItem[] = [];
 
   public setAuton<T extends Action = Action>(auton: Auton<T>): Auton<T> {
-    this.auton = auton;
+    this.auton.onModified.unsub(this.setData);
+    this.auton = auton as unknown as Auton;
     this.setData();
-    this.auton.onModified = () => {
-      this.setData();
-    };
+    this.auton.onModified.sub(this.setData.bind(this));
     return auton;
   }
 
@@ -61,6 +69,73 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItem> {
       return this.data;
     }
     return element.children;
+  }
+
+  // tree drag and drop provider
+  // reference: https://github.com/microsoft/vscode-extension-samples/blob/main/tree-view-sample/src/testViewDragAndDrop.ts
+  static DROP_MIME_TYPE: string = "application/vnd.code.tree.vrc-auton";
+  dropMimeTypes = [AutonTreeProvider.DROP_MIME_TYPE];
+  dragMimeTypes = ["text/uri-list"];
+
+  handleDrag?(
+    source: readonly TreeItem[],
+    dataTransfer: vscode.DataTransfer,
+    token: vscode.CancellationToken
+  ): void | Thenable<void> {
+    dataTransfer.set(
+      AutonTreeProvider.DROP_MIME_TYPE,
+      new vscode.DataTransferItem(source.map((e) => e.id))
+    );
+    // throw new Error("Method not implemented.");
+  }
+  handleDrop?(
+    target: TreeItem | undefined,
+    dataTransfer: vscode.DataTransfer,
+    token: vscode.CancellationToken
+  ): void | Thenable<void> {
+    const transferItem = dataTransfer.get(AutonTreeProvider.DROP_MIME_TYPE);
+    if (!transferItem) {
+      return;
+    }
+    const treeItems: TreeItem["id"][] = transferItem.value;
+
+    console.log({ target, dataTransfer, treeItem: treeItems });
+    if (
+      target?.id !== treeItems[0] &&
+      (target === undefined ||
+        this.data[this.data.indexOf(target) - 1]?.id !== treeItems[0])
+    )
+      try {
+        this.auton.makeEdit({
+          insertionIndex: target
+            ? this.auton.auton.findIndex((e) => target!.id == e.uuid)
+            : this.data.length,
+          sourceStart: this.auton.auton.findIndex(
+            (e) => treeItems[0] == e.uuid
+          ),
+          sourceEnd: this.auton.auton.findIndex(
+            (e) => treeItems.at(-1) == e.uuid
+          ),
+          reason: ["server.view.handleDrop"],
+        });
+      } catch (error) {
+        console.error("AutonView.handleDrop: ", error);
+        if (
+          isNativeError(error) ||
+          typeof error !== "string" ||
+          !/^auton\.\w+\(\):/.test(error)
+        )
+          throw error;
+      }
+    // let roots = this._getLocalRoots(treeItems);
+    // // Remove nodes that are already target's parent nodes
+    // roots = roots.filter(r => !this._isChild(this._getTreeElement(r.key), target));
+    // if (roots.length > 0) {
+    // 	// Reload parents of the moving elements
+    // 	const parents = roots.map(r => this.getParent(r));
+    // 	roots.forEach(r => this._reparentNode(r, target));
+    // 	this._onDidChangeTreeData.fire([...parents, target]);
+    // }
   }
 }
 

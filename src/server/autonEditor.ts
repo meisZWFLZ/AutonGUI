@@ -1,9 +1,10 @@
 import * as vscode from "vscode";
 import { getNonce } from "./util";
 import Message from "../common/message";
-import Auton from "../common/auton";
+import Auton, { AutonEdit } from "../common/auton";
 import { Translation } from "./translator";
-import { AutonTreeProvider } from "./autonView";
+import { AutonTreeProvider } from "./autonview";
+import { Action } from "../common/action";
 
 type CppAuton = Auton<Translation.CppAction>;
 type DocumentInfo = {
@@ -69,8 +70,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       }),
     ];
     webviewPanel.onDidDispose(
-      vscode.Disposable.from(...webviewDisposables).dispose,
-      webviewDisposables
+      vscode.Disposable.from(...webviewDisposables).dispose
     );
   }
   /**
@@ -165,9 +165,16 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
               document,
               AutonEditorProvider.translateDoc(document)
             )
-          ),
+          ) as unknown as Auton,
           0
         )
+      );
+      this.editorProvider.getAuton(document).onEdit.sub((event) =>
+        this.editorProvider.eventListeners.onAutonEdit({
+          webviewPanel,
+          document,
+          event,
+        })
       );
       // console.log({ setAuton: this.editorProvider.getAuton(document) });
       // Translation.AutonToCpp.generateTextForAction(Auton.createIntake());
@@ -199,10 +206,13 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       vscode.workspace.applyEdit(
         msg.edit.reduce((accumulator: vscode.WorkspaceEdit, edit) => {
           const workspaceEdit = Translation.AutonToCpp.translateAutonEdit(
-            this.editorProvider.getAuton(document),
+            this.editorProvider.getAuton(
+              document
+            ) as unknown as Auton<Translation.ActionWithOffset>,
             document,
             edit,
-            accumulator
+            accumulator,
+            edit.reason.concat("server.editor.msgListeners.onEdit")
           );
           return workspaceEdit;
         }, new vscode.WorkspaceEdit())
@@ -279,17 +289,57 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       if (event.contentChanges.length === 0) return;
 
       // translate edit to auton edit and send to webview
-      this.editorProvider.postMessage(
+      this.editorProvider.postEdits(
         webviewPanel,
-        new Message.ToWebview.Edit(
-          Translation.CppToAuton.changeAuton(
-            this.editorProvider.getAuton(document),
-            event,
-            this.editorProvider.getDocInfo(document).content
-          ),
-          0
+        Translation.CppToAuton.changeAuton(
+          this.editorProvider.getAuton(
+            document
+          ) as unknown as Auton<Translation.ActionWithOffset>,
+          event,
+          this.editorProvider.getDocInfo(document).content,
+          ["server.editor.eventListeners.onDidChangeTextDocument"]
         )
       );
+      this.editorProvider.getDocInfo(document).content = document.getText();
+    }
+    async onAutonEdit({
+      webviewPanel,
+      document,
+      event: edit,
+    }: {
+      webviewPanel: vscode.WebviewPanel;
+      document: vscode.TextDocument;
+      event: Parameters<Parameters<Auton["onEdit"]["sub"]>[0]>[0];
+    }) {
+      if (
+        edit.reason.some(
+          (r) => r.startsWith("webview") || r.startsWith("server.editor")
+        ) ||
+        !AutonEdit.TypeGuards.isMove(edit)
+      )
+        return;
+      console.log({
+        webviewPanel,
+        document,
+        edit,
+      });
+      vscode.workspace.applyEdit(
+        Translation.AutonToCpp.translateAutonEdit(
+          this.editorProvider.getAuton(
+            document
+          ) as unknown as Auton<Translation.ActionWithOffset>,
+          document,
+          edit,
+          new vscode.WorkspaceEdit(),
+          edit.reason.concat("server.editor.msgListeners.onEdit")
+        )
+      );
+      this.editorProvider.postEdits(webviewPanel, [
+        {
+          ...edit,
+          reason: edit.reason.concat("server.editor.msgListeners.onEdit"),
+        },
+      ]);
       this.editorProvider.getDocInfo(document).content = document.getText();
     }
   })(this);
@@ -393,11 +443,35 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     panel.webview.postMessage(msg);
     return p;
   }
-
+  private postEdits(
+    panel: vscode.WebviewPanel,
+    edits: AutonEdit.AutonEdit<Action>[],
+    newIndex: number = 0
+  ) {
+    if (
+      edits.some(
+        (e) =>
+          !AutonEdit.TypeGuards.isModify(e) ||
+          !e.reason.at(-1)?.endsWith("adjustOffset")
+      )
+    )
+      this.postMessage(
+        panel,
+        new Message.ToWebview.Edit(
+          edits.filter(
+            (e) =>
+              !AutonEdit.TypeGuards.isModify(e) ||
+              !e.reason.at(-1)?.endsWith("adjustOffset")
+          ),
+          newIndex
+        )
+      );
+  }
   private postMessage(
     panel: vscode.WebviewPanel,
     msg: typeof Message.ToWebview.prototype /* type: string, body: any */
   ): void {
+    // console.log("postMessage: ", { panel, msg });
     panel.webview.postMessage(/* { type, body } */ msg);
   }
 

@@ -1,20 +1,27 @@
 import * as vscode from "vscode";
 // import { CatScratchEditorProvider } from './catScratchEditor';
 import { AutonEditorProvider } from "./autonEditor";
-import { AutonTreeProvider } from "./autonView";
+import { AutonTreeProvider } from "./autonview";
 
 export function activate(context: vscode.ExtensionContext) {
   let autonView: AutonTreeProvider = new AutonTreeProvider(context);
-
+  
+  // create Auton List View
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider("vrc-auton.list-view", autonView)
+    vscode.window.createTreeView("vrc-auton.list-view", {
+      treeDataProvider: autonView,
+      showCollapseAll: true,
+      canSelectMany: true,
+      dragAndDropController: autonView,
+    })
   );
+
   vscode.commands.registerCommand("vrc-auton.list-view.refresh", () =>
     autonView.refresh()
   );
   // Register our custom editor providers
   context.subscriptions.push(
-    ...AutonEditorProvider.register(context , autonView)
+    ...AutonEditorProvider.register(context, autonView)
   );
   function isCpp(
     input: vscode.TextEditor | vscode.TextDocument | vscode.Uri | undefined

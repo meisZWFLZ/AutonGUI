@@ -2,6 +2,7 @@ import { randomUUID } from "crypto";
 import { Action, ActionTypeGuards, SetPose } from "../common/action";
 import Auton, { AutonData, AutonEdit } from "../common/auton";
 import * as vscode from "vscode";
+import { endianness } from "os";
 
 /** responsible for translating cpp text into an auton */
 export namespace Translation {
@@ -261,7 +262,7 @@ export namespace Translation {
                       let trueValue: boolean | string | number;
                       switch (type) {
                         case "bool":
-                          trueValue = (value === "true");
+                          trueValue = value === "true";
                           break;
                         case "string":
                           trueValue = String(value);
@@ -367,7 +368,8 @@ export namespace Translation {
     export function changeAuton(
       auton: Auton<ActionWithOffset>,
       change: vscode.TextDocumentChangeEvent,
-      oldDocText: string
+      oldDocText: string,
+      reason: string[]
     ): AutonEdit.AutonEdit[] {
       let edits: AutonEdit.AutonEdit<ActionWithOffset>[] = [];
       let docText: string = Array.from(oldDocText).join("");
@@ -455,6 +457,7 @@ export namespace Translation {
             : auton.auton.findLastIndex(
                 (act) => act.offset < changeOffset.offset
               ) + 1,
+          reason: reason.concat("server.translator.change"),
         };
         // adjust offsets of all actions after edit
         const offsetAdjustment: number =
@@ -472,6 +475,7 @@ export namespace Translation {
             offsetAdjustMods.push({
               index: i,
               newProperties,
+              reason: reason.concat("server.translator.adjustOffset"),
             });
         }
         // modify doc text
@@ -502,70 +506,126 @@ export namespace Translation {
       auton: Auton<ActionWithOffset>,
       doc: vscode.TextDocument,
       edit: AutonEdit.AutonEdit<Action>,
-      workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit()
+      workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit(),
+      reason: string[]
     ): vscode.WorkspaceEdit {
       const isReplace = AutonEdit.TypeGuards.isReplace(edit);
       const isModify = AutonEdit.TypeGuards.isModify(edit);
-      if (!isReplace && !isModify) return workspaceEdit;
+      const isMove = AutonEdit.TypeGuards.isMove(edit);
+      if (!isReplace && !isModify && !isMove) return workspaceEdit;
 
-      const editIndex =
-        "index" in edit
-          ? edit.index
-          : auton.auton.findIndex(({ uuid }) => uuid === edit.uuid);
-      if (editIndex < 0) return workspaceEdit;
+      const adjustEdits: AutonEdit.Modify<ActionWithOffset>[] = [];
+      if (isMove) {
+        const sourceOffsets = {
+          offset: auton.auton[edit.sourceStart].offset,
+          endOffset: auton.auton[edit.sourceEnd].endOffset,
+        };
+        const sourceRange: vscode.Range = upgradeOffsetsToRange(
+          sourceOffsets,
+          doc
+        );
+        const sourceLength = sourceOffsets.endOffset - sourceOffsets.offset;
+        let targetOffsets = {
+          offset: auton.auton[edit.insertionIndex - 1]?.endOffset ?? 0,
+          endOffset: auton.auton[edit.insertionIndex].offset,
+        };
+        // if (sourceOffsets.endOffset < targetOffsets.offset) {
+        //   targetOffsets.offset += sourceLength;
+        //   targetOffsets.endOffset += sourceLength;
+        // }
 
-      /** actions in auton that will be modified or deleted by the edit */
-      const affectedAutonActs: ActionWithOffset[] = isReplace
-        ? auton.auton.slice(edit.index, edit.index + edit.count)
-        : [auton.auton[editIndex]];
+        workspaceEdit.delete(doc.uri, sourceRange);
+        workspaceEdit.insert(
+          doc.uri,
+          doc.positionAt((targetOffsets.offset + targetOffsets.endOffset) / 2),
+          doc.getText(sourceRange)
+        );
 
-      /** new acts in edit */
-      const editActs: Action[] = isReplace
-        ? Array.isArray(edit.action)
-          ? edit.action
-          : [edit.action]
-        : // { ...this.auton[index], ...mod.newProperties }
-          [{ ...affectedAutonActs[0], ...edit.newProperties } as Action];
-      // removes text associated with the actions that will be deleted
-      for (const deletedAct of affectedAutonActs
-        // if action is modified, we do not want to remove it
-        .filter(
-          ({ uuid, type }) =>
-            !editActs.some(
-              ({ uuid: newUUID, type: newType }) =>
-                newUUID === uuid && type === newType
-            )
-        ))
-        workspaceEdit.delete(doc.uri, upgradeOffsetsToRange(deletedAct, doc));
-
-      /** where should the next edit be written (used for new actions) */
-      let writeOffset: number = auton.auton.at(editIndex)?.offset ?? 0;
-
-      // either modify or create new action
-      for (const newAct of editActs) {
-        let modifiedAct: ActionWithOffset | undefined;
-        if (
-          // is newAct a modified version of an action in affectedAutonActs
-          (modifiedAct = affectedAutonActs.find(
-            ({ uuid, type }) => uuid === newAct.uuid && type === newAct.type
-          )) !== undefined
-        )
-          // update existing action's params
-          updateActionParams(
-            { ...modifiedAct, params: newAct.params } as ActionWithOffset,
-            doc,
-            workspaceEdit
-          );
-        else {
-          // add new action's text to document
-          workspaceEdit.insert(
-            doc.uri,
-            doc.positionAt(writeOffset),
-            generateTextForAction(newAct)
-          );
+        // must fix offsets of any actions after start source index and before end target index
+        const offsetAdjustment = sourceOffsets.offset - sourceOffsets.endOffset;
+        for (
+          let index = Math.min(edit.sourceEnd, edit.insertionIndex);
+          index < Math.max(edit.sourceStart, edit.insertionIndex);
+          index++
+        ) {
+          const act = auton.auton[index];
+          adjustEdits.push({
+            reason: reason.concat(
+              "server.translator.translateEdit.adjustOffset"
+            ),
+            newProperties: {
+              offset:
+                act.offset +
+                offsetAdjustment *
+                  (edit.sourceEnd < edit.insertionIndex ? -1 : 1),
+              endOffset:
+                act.endOffset +
+                offsetAdjustment *
+                  (edit.sourceEnd < edit.insertionIndex ? -1 : 1),
+            },
+            index,
+          });
         }
-        // update next action location
-        writeOffset += workspaceEdit.get(doc.uri).at(-1)?.newText.length ?? 0;
+      } else {
+        const editIndex =
+          "index" in edit
+            ? edit.index
+            : auton.auton.findIndex(({ uuid }) => uuid === edit.uuid);
+        if (editIndex < 0) return workspaceEdit;
+
+        /** actions in auton that will be modified or deleted by the edit */
+        const affectedAutonActs: ActionWithOffset[] = isReplace
+          ? auton.auton.slice(edit.index, edit.index + edit.count)
+          : [auton.auton[editIndex]];
+
+        /** new acts in edit */
+        const editActs: Action[] = isReplace
+          ? Array.isArray(edit.action)
+            ? edit.action
+            : [edit.action]
+          : // { ...this.auton[index], ...mod.newProperties }
+            [{ ...affectedAutonActs[0], ...edit.newProperties } as Action];
+        // removes text associated with the actions that will be deleted
+        for (const deletedAct of affectedAutonActs
+          // if action is modified, we do not want to remove it
+          .filter(
+            ({ uuid, type }) =>
+              !editActs.some(
+                ({ uuid: newUUID, type: newType }) =>
+                  newUUID === uuid && type === newType
+              )
+          ))
+          workspaceEdit.delete(doc.uri, upgradeOffsetsToRange(deletedAct, doc));
+
+        /** where should the next edit be written (used for new actions) */
+        let writeOffset: number = auton.auton.at(editIndex)?.offset ?? 0;
+
+        // either modify or create new action
+        for (const newAct of editActs) {
+          let modifiedAct: ActionWithOffset | undefined;
+          if (
+            // is newAct a modified version of an action in affectedAutonActs
+            (modifiedAct = affectedAutonActs.find(
+              ({ uuid, type }) => uuid === newAct.uuid && type === newAct.type
+            )) !== undefined
+          )
+            // update existing action's params
+            updateActionParams(
+              { ...modifiedAct, params: newAct.params } as ActionWithOffset,
+              doc,
+              workspaceEdit
+            );
+          else {
+            // add new action's text to document
+            workspaceEdit.insert(
+              doc.uri,
+              doc.positionAt(writeOffset),
+              generateTextForAction(newAct)
+            );
+          }
+          // update next action location
+          writeOffset += workspaceEdit.get(doc.uri).at(-1)?.newText.length ?? 0;
+        }
       }
 
       return workspaceEdit;
