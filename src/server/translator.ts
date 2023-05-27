@@ -517,8 +517,11 @@ export namespace Translation {
       const adjustEdits: AutonEdit.Modify<ActionWithOffset>[] = [];
       if (isMove) {
         const sourceOffsets = {
-          offset: auton.auton[edit.sourceStart].offset,
-          endOffset: auton.auton[edit.sourceEnd].endOffset,
+          offset: auton.auton[edit.insertionIndex].offset,
+          endOffset:
+            auton.auton[
+              edit.insertionIndex + edit.sourceEnd - edit.sourceStart - 1
+            ].endOffset,
         };
         const sourceRange: vscode.Range = upgradeOffsetsToRange(
           sourceOffsets,
@@ -527,7 +530,9 @@ export namespace Translation {
         const sourceLength = sourceOffsets.endOffset - sourceOffsets.offset;
         let targetOffsets = {
           offset: auton.auton[edit.insertionIndex - 1]?.endOffset ?? 0,
-          endOffset: auton.auton[edit.insertionIndex].offset,
+          endOffset:
+            auton.auton[edit.insertionIndex + edit.sourceEnd - edit.sourceStart]
+              .offset,
         };
         // if (sourceOffsets.endOffset < targetOffsets.offset) {
         //   targetOffsets.offset += sourceLength;
@@ -566,6 +571,7 @@ export namespace Translation {
             index,
           });
         }
+        // return workspaceEdit;
       } else {
         const editIndex =
           "index" in edit

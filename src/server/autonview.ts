@@ -108,14 +108,13 @@ export class AutonTreeProvider
       try {
         this.auton.makeEdit({
           insertionIndex: target
-            ? this.auton.auton.findIndex((e) => target!.id == e.uuid)
+            ? this.auton.auton.findIndex((e) => target.id == e.uuid) + 1
             : this.data.length,
           sourceStart: this.auton.auton.findIndex(
             (e) => treeItems[0] == e.uuid
           ),
-          sourceEnd: this.auton.auton.findIndex(
-            (e) => treeItems.at(-1) == e.uuid
-          ),
+          sourceEnd:
+            this.auton.auton.findIndex((e) => treeItems.at(-1) == e.uuid) + 1,
           reason: ["server.view.handleDrop"],
         });
       } catch (error) {

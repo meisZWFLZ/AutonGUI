@@ -137,7 +137,7 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     try {
       if (start > end) throw "auton.move(): sourceStart cannot be greater than sourceEnd";
       if (
-        end >= this.auton.length ||
+        end > this.auton.length ||
         index >= this.auton.length ||
         end < 0 ||
         start < 0
@@ -152,8 +152,8 @@ export default class Auton<A extends BaseAction<{}> = Action> {
         reason: moveEdit.reason.concat("common.auton.move.insert"),
       });
       this.remove({
-        index: start + (end < index ? start - end : 0),
-        count: start - end,
+        index: start + (end < index ? start - end : 0) + 1,
+        count: end - start,
         action: [],
         reason: moveEdit.reason.concat("common.auton.move.remove"),
       });

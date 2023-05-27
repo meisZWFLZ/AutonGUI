@@ -9,8 +9,10 @@ import { Action } from "../common/action";
 type CppAuton = Auton<Translation.CppAction>;
 type DocumentInfo = {
   auton: CppAuton;
-  /** informs text edit listener that the edit is due to this class and that it can ignore it */
-  modifiedText: boolean;
+  // /** informs text edit listener that the edit is due to this class and that it can ignore it */
+  // modifiedText: boolean;
+  /** edits made by AutonEditorProvider, used to indicate when an edit may be ignored by the edit listener */
+  edits: { range: vscode.Range; newText: string }[];
   content: string;
 };
 
@@ -80,8 +82,8 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     [key: string]: DocumentInfo;
   } = {};
 
-  protected getDocInfo(doc: vscode.TextDocument): DocumentInfo {
-    return this.documentInfo[doc.uri.toString()];
+  protected getDocInfo(doc: vscode.TextDocument | vscode.Uri): DocumentInfo {
+    return this.documentInfo[("uri" in doc ? doc.uri : doc).toString()];
   }
   protected setDocInfo(
     doc: vscode.TextDocument,
@@ -109,10 +111,39 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     else
       this.documentInfo[uri] = {
         auton: auton,
-        modifiedText: false,
+        edits: [],
         content: doc.getText(),
       };
     return auton;
+  }
+  /**
+   * applies {@link wEdit} and adds it to document info to indicate
+   * the source of the edit to the onDidChangeTextDocument listener
+   */
+  protected applyWorkspaceEdit(wEdit: vscode.WorkspaceEdit) {
+    wEdit
+      .entries()
+      .forEach(([uri, edits]) => this.getDocInfo(uri).edits.push(...edits));
+    vscode.workspace.applyEdit(wEdit);
+  }
+  /**
+   * Finds whether change is due to {@link AutonEditorProvider this} and if so removes corresponding edits from {@link documentInfo}
+   * @param changeEv change event
+   * @returns whether the change is due to the actions of {@link AutonEditorProvider this}
+   */
+  protected isFromThis(changeEv: vscode.TextDocumentChangeEvent): boolean {
+    return changeEv.contentChanges.reduce((output, contentChange) => {
+      const curEdits = this.getDocInfo(changeEv.document).edits;
+      let newEdits = curEdits.filter(
+        (edit) =>
+          edit.range.isEqual(contentChange.range) &&
+          edit.newText == contentChange.text
+      );
+      if (newEdits.length === curEdits.length) return output;
+
+      this.getDocInfo(changeEv.document).edits = newEdits;
+      return true;
+    }, false);
   }
 
   /**
@@ -203,7 +234,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       msg: typeof Message.ToExtension.Edit.prototype;
     }): void {
       // interpret auton edit as a workspace edit and then apply the workspace edit
-      vscode.workspace.applyEdit(
+      this.editorProvider.applyWorkspaceEdit(
         msg.edit.reduce((accumulator: vscode.WorkspaceEdit, edit) => {
           const workspaceEdit = Translation.AutonToCpp.translateAutonEdit(
             this.editorProvider.getAuton(
@@ -217,7 +248,6 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           return workspaceEdit;
         }, new vscode.WorkspaceEdit())
       );
-      this.editorProvider.getDocInfo(document).modifiedText == true;
     }
   })(this);
 
@@ -280,26 +310,25 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       document: vscode.TextDocument;
       event: vscode.TextDocumentChangeEvent;
     }): void {
-      if (event.document.uri.toString() !== document.uri.toString()) return;
-      // if this event was caused by the editorProvider, then ignore it
-      if (this.editorProvider.getDocInfo(document).modifiedText == true) {
-        this.editorProvider.getDocInfo(document).modifiedText = false;
-        return;
-      }
       if (event.contentChanges.length === 0) return;
+      if (event.document.uri.toString() !== document.uri.toString()) return;
 
-      // translate edit to auton edit and send to webview
-      this.editorProvider.postEdits(
-        webviewPanel,
-        Translation.CppToAuton.changeAuton(
-          this.editorProvider.getAuton(
-            document
-          ) as unknown as Auton<Translation.ActionWithOffset>,
-          event,
-          this.editorProvider.getDocInfo(document).content,
-          ["server.editor.eventListeners.onDidChangeTextDocument"]
-        )
-      );
+      // if this event was caused by the editorProvider, then ignore it
+      if (!this.editorProvider.isFromThis(event)) {
+        // translate edit to auton edit and send to webview
+        this.editorProvider.postEdits(
+          webviewPanel,
+          Translation.CppToAuton.changeAuton(
+            this.editorProvider.getAuton(
+              document
+            ) as unknown as Auton<Translation.ActionWithOffset>,
+            event,
+            this.editorProvider.getDocInfo(document).content,
+            ["server.editor.eventListeners.onDidChangeTextDocument"]
+          )
+        );
+      }
+      // always update content if event modifies document
       this.editorProvider.getDocInfo(document).content = document.getText();
     }
     async onAutonEdit({
@@ -323,7 +352,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         document,
         edit,
       });
-      vscode.workspace.applyEdit(
+      this.editorProvider.applyWorkspaceEdit(
         Translation.AutonToCpp.translateAutonEdit(
           this.editorProvider.getAuton(
             document
@@ -340,7 +369,6 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           reason: edit.reason.concat("server.editor.msgListeners.onEdit"),
         },
       ]);
-      this.editorProvider.getDocInfo(document).content = document.getText();
     }
   })(this);
 
