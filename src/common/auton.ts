@@ -72,7 +72,7 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     index,
     count = 0,
     reason,
-  }: AutonEdit.Insert<A>) {
+  }: AutonEdit.Insert<A>): (A | (SetPose & A))[] {
     const acts: A[] = Array.isArray(_act) ? _act : [_act];
     if (
       index == 0 &&
@@ -82,12 +82,17 @@ export default class Auton<A extends BaseAction<{}> = Action> {
       )
     )
       throw 'auton.insert(): cannot put an action not of type "SetPose" in 0th index of auton';
-    this.replace({ index, count, action: acts, reason });
+    return this.replace({ index, count, action: acts, reason });
   }
   /**
    * @throws if replacing 0th index with an action not of type {@link SetPose}
    */
-  public replace({ action: _act, index, count, reason }: AutonEdit.Replace<A>) {
+  public replace({
+    action: _act,
+    index,
+    count,
+    reason,
+  }: AutonEdit.Replace<A>): (A | (SetPose & A))[] {
     const acts: A[] = Array.isArray(_act) ? _act : [_act];
     // ignore for now as this should alert the user (todo)
     // if (
@@ -98,15 +103,22 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     //   )
     // )
     //   throw 'cannot put an action not of type "SetPose" in 0th index of auton';
-    this._auton.splice(index, count ?? acts.length, ...acts);
+    const out = this._auton.splice(index, count ?? acts.length, ...acts);
     this._onReplaceEdit.dispatch({ action: _act, index, count, reason });
+    return out;
   }
   /**
    * @throws if removing 0th element
    */
-  public remove({ index, count = 1, action = [], reason }: AutonEdit.Remove) {
-    if (index == 0) throw "auton.remove(): cannot remove the 0th element of auton";
-    this.replace({ index, count, action, reason });
+  public remove({
+    index,
+    count = 1,
+    action = [],
+    reason,
+  }: AutonEdit.Remove): (A | (SetPose & A))[] {
+    if (index == 0)
+      throw "auton.remove(): cannot remove the 0th element of auton";
+    return this.replace({ index, count, action, reason });
   }
   /**
    * @throws if modifying 0th element's params to a non positional type
@@ -122,7 +134,8 @@ export default class Auton<A extends BaseAction<{}> = Action> {
       CoordinateUtilities.isPosition(mod.newProperties.params)
     )
       this._auton[index] = { ...this.auton[index], ...mod.newProperties };
-    else throw "auton.modify(): cannot set start position to non positional type";
+    else
+      throw "auton.modify(): cannot set start position to non positional type";
     this._onModifyEdit.dispatch(mod);
   }
   /**
@@ -135,27 +148,27 @@ export default class Auton<A extends BaseAction<{}> = Action> {
       insertionIndex: index,
     } = moveEdit;
     try {
-      if (start > end) throw "auton.move(): sourceStart cannot be greater than sourceEnd";
+      if (start > end)
+        throw "auton.move(): sourceStart cannot be greater than sourceEnd";
       if (
         end > this.auton.length ||
         index >= this.auton.length ||
-        end < 0 ||
+        end < 1 ||
         start < 0
       )
         throw "auton.move(): out of auton array bounds";
       if (start <= index && index < end)
         throw "auton.move(): cannot move source to an insertionIndex within source";
       this.insert({
-        index,
-        action: this._auton.slice(start, end),
+        index: index + (index >= end ? end - start : 0),
+        action: this.remove({
+          index: start,
+          count: end - start,
+          action: [],
+          reason: moveEdit.reason.concat("common.auton.move.remove"),
+        }),
         count: 0,
         reason: moveEdit.reason.concat("common.auton.move.insert"),
-      });
-      this.remove({
-        index: start + (end < index ? start - end : 0) + 1,
-        count: end - start,
-        action: [],
-        reason: moveEdit.reason.concat("common.auton.move.remove"),
       });
       this._onMoveEdit.dispatch(moveEdit);
     } catch (error) {

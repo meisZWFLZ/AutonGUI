@@ -108,7 +108,7 @@ export class AutonTreeProvider
       try {
         this.auton.makeEdit({
           insertionIndex: target
-            ? this.auton.auton.findIndex((e) => target.id == e.uuid) + 1
+            ? this.auton.auton.findIndex((e) => target.id == e.uuid)
             : this.data.length,
           sourceStart: this.auton.auton.findIndex(
             (e) => treeItems[0] == e.uuid

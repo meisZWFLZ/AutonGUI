@@ -532,22 +532,31 @@ export namespace Translation {
           offset: auton.auton[edit.insertionIndex - 1]?.endOffset ?? 0,
           endOffset:
             auton.auton[edit.insertionIndex + edit.sourceEnd - edit.sourceStart]
-              .offset,
+              ?.offset ?? Infinity,
         };
         // if (sourceOffsets.endOffset < targetOffsets.offset) {
         //   targetOffsets.offset += sourceLength;
         //   targetOffsets.endOffset += sourceLength;
         // }
-
-        workspaceEdit.delete(doc.uri, sourceRange);
+        const deletedOffsets = {
+          offset:
+            sourceOffsets.offset -
+            doc.positionAt(sourceOffsets.offset).character -
+            1,
+          endOffset: sourceOffsets.endOffset,
+        };
+        const deletedRange = upgradeOffsetsToRange(deletedOffsets, doc);
+        workspaceEdit.delete(doc.uri, deletedRange);
+        const newText = doc.getText(deletedRange);
         workspaceEdit.insert(
           doc.uri,
-          doc.positionAt((targetOffsets.offset + targetOffsets.endOffset) / 2),
-          doc.getText(sourceRange)
+          doc.positionAt(targetOffsets.offset),
+          newText
         );
 
         // must fix offsets of any actions after start source index and before end target index
-        const offsetAdjustment = sourceOffsets.offset - sourceOffsets.endOffset;
+        const offsetAdjustment =
+          deletedOffsets.endOffset - deletedOffsets.offset;
         for (
           let index = Math.min(edit.sourceEnd, edit.insertionIndex);
           index < Math.max(edit.sourceStart, edit.insertionIndex);
@@ -633,7 +642,7 @@ export namespace Translation {
           writeOffset += workspaceEdit.get(doc.uri).at(-1)?.newText.length ?? 0;
         }
       }
-
+      auton.makeEdit(adjustEdits);
       return workspaceEdit;
     }
     /**
