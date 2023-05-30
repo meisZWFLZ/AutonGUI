@@ -4,21 +4,9 @@ import { AutonEditorProvider } from "./autonEditor";
 import { AutonTreeProvider } from "./autonview";
 
 export function activate(context: vscode.ExtensionContext) {
-  let autonView: AutonTreeProvider = new AutonTreeProvider(context);
-  
   // create Auton List View
-  context.subscriptions.push(
-    vscode.window.createTreeView("vrc-auton.list-view", {
-      treeDataProvider: autonView,
-      showCollapseAll: true,
-      canSelectMany: true,
-      dragAndDropController: autonView,
-    })
-  );
+  let autonView: AutonTreeProvider = new AutonTreeProvider(context);
 
-  vscode.commands.registerCommand("vrc-auton.list-view.refresh", () =>
-    autonView.refresh()
-  );
   // Register our custom editor providers
   context.subscriptions.push(
     ...AutonEditorProvider.register(context, autonView)

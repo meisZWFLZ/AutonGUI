@@ -11,6 +11,7 @@ import {
 } from "../common/action";
 import Auton, { AutonEdit } from "../common/auton";
 import { isNativeError } from "util/types";
+import { SignalDispatcher } from "strongly-typed-events";
 
 export class AutonTreeProvider
   implements
@@ -23,11 +24,21 @@ export class AutonTreeProvider
   public onDidChangeTreeData: vscode.Event<TreeItem | undefined | void> =
     this._onDidChangeTreeData.event;
 
+  private _onRefreshCommand = new SignalDispatcher();
+  public get onRefreshCommand() {
+    return this._onRefreshCommand.asEvent();
+  }
+
   public refresh(): void {
     this._onDidChangeTreeData.fire();
   }
 
+  private _view: vscode.TreeView<TreeItem>;
   private data: TreeItem[] = [];
+
+  public get view() {
+    return this._view;
+  }
 
   public setAuton<T extends Action = Action>(auton: Auton<T>): Auton<T> {
     this.auton.onModified.unsub(this.setData);
@@ -56,10 +67,28 @@ export class AutonTreeProvider
     protected auton: Auton = Auton.newAutonAtOrigin()
   ) {
     this.setData();
+
+    this._view = vscode.window.createTreeView("vrc-auton.list-view", {
+      treeDataProvider: this,
+      showCollapseAll: true,
+      canSelectMany: true,
+      dragAndDropController: this,
+    });
+    _context.subscriptions.push(this._view);
+    _context.subscriptions.push(
+      new vscode.Disposable(this.onRefreshCommand.sub(() => this.refresh()))
+    );
+
+    vscode.commands.registerCommand("vrc-auton.list-view.refresh", () =>
+      this._onRefreshCommand.dispatch()
+    );
   }
 
-  getTreeItem(element: TreeItem): vscode.TreeItem | Thenable<vscode.TreeItem> {
+  getTreeItem(element: TreeItem): TreeItem {
     return element;
+  }
+  getTreeItemFromId(id: string): TreeItem | undefined {
+    return this.data.find((e) => e.id === id);
   }
 
   getChildren(
@@ -223,7 +252,7 @@ type TreeItemProperties = RequireSome<
   "label"
 > & { children?: (TreeItem | TreeItemProperties)[] };
 
-class TreeItem extends vscode.TreeItem {
+export class TreeItem extends vscode.TreeItem {
   children: TreeItem[] | undefined;
 
   public static fromAction<A extends Action["type"]>(

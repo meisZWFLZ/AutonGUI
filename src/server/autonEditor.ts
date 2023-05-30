@@ -3,8 +3,9 @@ import { getNonce } from "./util";
 import Message from "../common/message";
 import Auton, { AutonEdit } from "../common/auton";
 import { Translation } from "./translator";
-import { AutonTreeProvider } from "./autonview";
+import { AutonTreeProvider, TreeItem } from "./autonview";
 import { Action } from "../common/action";
+import { ISimpleEvent } from "strongly-typed-events";
 
 type CppAuton = Auton<Translation.CppAction>;
 type DocumentInfo = {
@@ -14,6 +15,9 @@ type DocumentInfo = {
   /** edits made by AutonEditorProvider, used to indicate when an edit may be ignored by the edit listener */
   edits: { range: vscode.Range; newText: string }[];
   content: string;
+  unSubOnEdit: ReturnType<
+    ISimpleEvent<AutonEdit.AutonEdit<Translation.ActionWithOffset>>["sub"]
+  >;
 };
 
 /**
@@ -113,6 +117,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         auton: auton,
         edits: [],
         content: doc.getText(),
+        unSubOnEdit: () => {},
       };
     return auton;
   }
@@ -167,6 +172,35 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     return Translation.CppToAuton.translateDoc(doc);
   }
 
+  protected translateAndSetAuton(
+    document: vscode.TextDocument,
+    webviewPanel: vscode.WebviewPanel
+  ) {
+    try {
+      this.getDocInfo(document)?.unSubOnEdit();
+      this.postMessage(
+        webviewPanel,
+        new Message.ToWebview.AutonUpdate(
+          AutonEditorProvider.autonView.setAuton(
+            this.setAuton(document, AutonEditorProvider.translateDoc(document))
+          ) as unknown as Auton,
+          0
+        )
+      );
+      this.getDocInfo(document).unSubOnEdit = this.getAuton(
+        document
+      ).onEdit.sub((event) =>
+        this.eventListeners.onAutonEdit({
+          webviewPanel,
+          document,
+          event,
+        })
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   // /**
   //  * Translates the edit to an auton
   //  */
@@ -188,25 +222,9 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       msg: typeof Message.ToExtension.Ready.prototype;
     }): void {
       // translate cpp into an auton and send to webview
-      this.editorProvider.postMessage(
-        webviewPanel,
-        new Message.ToWebview.AutonUpdate(
-          AutonEditorProvider.autonView.setAuton(
-            this.editorProvider.setAuton(
-              document,
-              AutonEditorProvider.translateDoc(document)
-            )
-          ) as unknown as Auton,
-          0
-        )
-      );
-      this.editorProvider.getAuton(document).onEdit.sub((event) =>
-        this.editorProvider.eventListeners.onAutonEdit({
-          webviewPanel,
-          document,
-          event,
-        })
-      );
+      this.editorProvider.translateAndSetAuton(document, webviewPanel);
+
+      // AutonEditorProvider.autonView.view.on
       // console.log({ setAuton: this.editorProvider.getAuton(document) });
       // Translation.AutonToCpp.generateTextForAction(Auton.createIntake());
     }
@@ -286,6 +304,14 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         vscode.workspace.onDidChangeTextDocument((event) =>
           this.onDidChangeTextDocument({ webviewPanel, document, event })
         ),
+        AutonEditorProvider.autonView.view.onDidChangeSelection((event) =>
+          this.onAutonViewDidChangeSelection({ webviewPanel, document, event })
+        ),
+        new vscode.Disposable(
+          AutonEditorProvider.autonView.onRefreshCommand.sub(() =>
+            this.onAutonViewRefresh({ webviewPanel, document })
+          )
+        ),
       ];
     }
     onDidChangeTextEditorSelection({
@@ -300,6 +326,19 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       if (event.textEditor.document.uri.toString() !== document.uri.toString())
         return;
       // interpret selection as an index in the auton array and send to webview
+      const id = this.editorProvider
+        .getAuton(document)
+        .auton.find((act) =>
+          event.selections.some((s) =>
+            s.contains(
+              Translation.AutonToCpp.upgradeOffsetsToRange(act, document)
+            )
+          )
+        )?.uuid;
+      if (!id) return;
+      const item = AutonEditorProvider.autonView.getTreeItemFromId(id);
+      if (!item) return;
+      // AutonEditorProvider.autonView.view.reveal(item);
     }
     onDidChangeTextDocument({
       webviewPanel,
@@ -328,6 +367,16 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           )
         );
       }
+
+      console.log(this.editorProvider.getAuton(document).auton);
+      console.log(
+        "offset:",
+        this.editorProvider.getAuton(document).auton.map((e) => e.offset)
+      );
+      console.log(
+        "endOff:",
+        this.editorProvider.getAuton(document).auton.map((e) => e.endOffset)
+      );
       // always update content if event modifies document
       this.editorProvider.getDocInfo(document).content = document.getText();
     }
@@ -369,6 +418,37 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           reason: edit.reason.concat("server.editor.msgListeners.onEdit"),
         },
       ]);
+    }
+    async onAutonViewDidChangeSelection({
+      webviewPanel,
+      document,
+      event: { selection },
+    }: {
+      webviewPanel: vscode.WebviewPanel;
+      document: vscode.TextDocument;
+      event: vscode.TreeViewSelectionChangeEvent<TreeItem>;
+    }) {
+      let editor = vscode.window.visibleTextEditors.find(
+        (editor) => editor.document.uri === document.uri
+      );
+      if (!editor) editor = await vscode.window.showTextDocument(document);
+      if (!editor) return;
+      editor.selections = this.editorProvider
+        .getAuton(document)
+        .auton.filter((act) => selection.map((e) => e.id).includes(act.uuid))
+        .map((act) =>
+          Translation.AutonToCpp.upgradeOffsetsToRange(act, document)
+        )
+        .map(({ end, start }) => new vscode.Selection(start, end));
+    }
+    onAutonViewRefresh({
+      webviewPanel,
+      document,
+    }: {
+      webviewPanel: vscode.WebviewPanel;
+      document: vscode.TextDocument;
+    }) {
+      this.editorProvider.translateAndSetAuton(document, webviewPanel);
     }
   })(this);
 
