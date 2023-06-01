@@ -106,7 +106,15 @@
           "group": "YourGroup@1"
         }
       ]
-    }
+    },
+    "keybindings": [
+      {
+        "command": "vrc-auton.list-view.refresh",
+        "key": "ctrl+shift+r",
+        "mac": "cmd+shift+r",
+        "when": "view.vrc-auton.list-view.visible"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",

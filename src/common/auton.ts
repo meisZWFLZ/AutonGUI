@@ -15,7 +15,7 @@ import {
   BaseAction,
   Wait,
 } from "./action.js";
-import { randomUUID } from "crypto";
+import { UUID, randomUUID } from "crypto";
 import { SimpleEventDispatcher, SignalDispatcher } from "strongly-typed-events";
 
 export type AutonData<A extends BaseAction<{}> = Action> = [
@@ -44,7 +44,7 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     });
   }
 
-  public get auton(): Readonly<AutonData<A>> {
+  public get auton(): Readonly<AutonData<Readonly<A>>> {
     return this._auton;
   }
   // public set auton(auton: AutonData<A>) {
@@ -104,7 +104,13 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     // )
     //   throw 'cannot put an action not of type "SetPose" in 0th index of auton';
     const out = this._auton.splice(index, count ?? acts.length, ...acts);
-    this._onReplaceEdit.dispatch({ action: _act, index, count, reason });
+    this._onReplaceEdit.dispatch({
+      action: _act,
+      index,
+      count,
+      reason,
+      deletedActs: out,
+    });
     return out;
   }
   /**
@@ -132,11 +138,16 @@ export default class Auton<A extends BaseAction<{}> = Action> {
       index != 0 ||
       !("params" in mod) ||
       CoordinateUtilities.isPosition(mod.newProperties.params)
-    )
+    ) {
+      const oldProperties = Object.fromEntries(
+        Object.entries(this.auton[index]).filter(([key]) =>
+          Object.keys(mod.newProperties).includes(key[0])
+        )
+      ) as AutonEdit.Result.Modify<A>["oldProperties"];
       this._auton[index] = { ...this.auton[index], ...mod.newProperties };
-    else
+      this._onModifyEdit.dispatch({ ...mod, oldProperties });
+    } else
       throw "auton.modify(): cannot set start position to non positional type";
-    this._onModifyEdit.dispatch(mod);
   }
   /**
    * @throws if moving element to or from 0th index
@@ -148,8 +159,8 @@ export default class Auton<A extends BaseAction<{}> = Action> {
       insertionIndex: index,
     } = moveEdit;
     try {
-      if (start > end)
-        throw "auton.move(): sourceStart cannot be greater than sourceEnd";
+      if (start >= end)
+        throw "auton.move(): sourceStart must be smaller than sourceEnd";
       if (
         end > this.auton.length ||
         index >= this.auton.length ||
@@ -157,16 +168,16 @@ export default class Auton<A extends BaseAction<{}> = Action> {
         start < 0
       )
         throw "auton.move(): out of auton array bounds";
-      if (start <= index && index < end)
+      if (start <= index && index <= end)
         throw "auton.move(): cannot move source to an insertionIndex within source";
       this.insert({
-        index: index + (index >= end ? end - start : 0),
         action: this.remove({
           index: start,
           count: end - start,
           action: [],
           reason: moveEdit.reason.concat("common.auton.move.remove"),
         }),
+        index: 1 + index - (index > start ? end - start : 0),
         count: 0,
         reason: moveEdit.reason.concat("common.auton.move.insert"),
       });
@@ -195,7 +206,12 @@ export default class Auton<A extends BaseAction<{}> = Action> {
       }
     });
   }
-
+  getActionFromId(uuid: UUID): A | undefined {
+    return this.auton.find((act) => act.uuid === uuid);
+  }
+  getIndexFromId(uuid: UUID): number {
+    return this.auton.findIndex((act) => act.uuid === uuid);
+  }
   // if for some reason the create functions must be redone, I used this snippet:
   // "Create Action": {
   //   "prefix": "act",
@@ -245,10 +261,14 @@ export default class Auton<A extends BaseAction<{}> = Action> {
 
   // Events
   private _onModified = new SignalDispatcher();
-  private _onEdit = new SimpleEventDispatcher<AutonEdit.AutonEdit<A>>();
-  private _onReplaceEdit = new SimpleEventDispatcher<AutonEdit.Replace<A>>();
-  private _onModifyEdit = new SimpleEventDispatcher<AutonEdit.Modify<A>>();
-  private _onMoveEdit = new SimpleEventDispatcher<AutonEdit.Move>();
+  private _onEdit = new SimpleEventDispatcher<AutonEdit.Result.AutonEdit<A>>();
+  private _onReplaceEdit = new SimpleEventDispatcher<
+    AutonEdit.Result.Replace<A>
+  >();
+  private _onModifyEdit = new SimpleEventDispatcher<
+    AutonEdit.Result.Modify<A>
+  >();
+  private _onMoveEdit = new SimpleEventDispatcher<AutonEdit.Result.Move>();
 
   public get onModified() {
     return this._onModified.asEvent();
@@ -308,8 +328,23 @@ export namespace AutonEdit {
     readonly count: number;
   }
   export interface Move extends Base {
+    /**
+     * @description index of first moving element
+     *
+     * @range 0 \<= *sourceStart* \< {@link sourceEnd} \<= auton.length
+     */
     readonly sourceStart: number;
+    /**
+     * @description index after last moving element
+     *
+     * @range 0 \<= {@link sourceStart} \< *sourceEnd* \<= auton.length
+     */
     readonly sourceEnd: number;
+    /**
+     * @description index of element that moving elements should be placed before
+     *
+     * @range 0 \<= *insertionIndex* \<= auton.length && (*insertionIndex* \< {@link sourceStart} || {@link sourceEnd} \< *insertionIndex*)
+     */
     readonly insertionIndex: number;
   }
   /**
@@ -324,6 +359,20 @@ export namespace AutonEdit {
     | Replace<A>
     | Modify<A>
     | Move;
+
+  export namespace Result {
+    export type Modify<A extends BaseAction<{}>> = AutonEdit.Modify<A> & {
+      readonly oldProperties: Partial<Omit<A, "type" | "uuid">>;
+    };
+    export type Move = AutonEdit.Move;
+    export type Replace<A extends BaseAction<{}>> = AutonEdit.Replace<A> & {
+      readonly deletedActs: A[];
+    };
+    export type AutonEdit<A extends BaseAction<{}> = Action> =
+      | Replace<A>
+      | Modify<A>
+      | Move;
+  }
 
   export namespace TypeGuards {
     function isNonNullObject(obj: unknown): obj is NonNullable<Object> {

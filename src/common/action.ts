@@ -1,3 +1,4 @@
+import { UUID } from "crypto";
 import { Position } from "./coordinates";
 
 export namespace BaseAction {
@@ -17,11 +18,11 @@ export interface BaseAction<P extends BaseAction.Params> {
   /**
    * used to identify when an action is being modified
    */
-  readonly uuid: string;
+  readonly uuid: UUID;
 }
 
 export namespace SetPose {
-  export type Params = Position & {radians?: boolean};
+  export type Params = Position & { radians?: boolean };
 }
 export interface SetPose
   extends BaseAction<SetPose.Params & BaseAction.Params> {

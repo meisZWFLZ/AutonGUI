@@ -1,8 +1,7 @@
-import { randomUUID } from "crypto";
+import { UUID, randomUUID } from "crypto";
 import { Action, ActionTypeGuards, SetPose } from "../common/action";
 import Auton, { AutonData, AutonEdit } from "../common/auton";
 import * as vscode from "vscode";
-import { endianness } from "os";
 
 /** responsible for translating cpp text into an auton */
 export namespace Translation {
@@ -79,7 +78,7 @@ export namespace Translation {
        * @returns a string that matches a param with type string with a named capturing group
        */
       export function string(n: string): string {
-        return `(?<string_${n}>${STRING.source})`;
+        return `"(?<string_${n}>.*)"`;
       }
       /**
        * @returns separator surrounded by "[\s\n]*"'s
@@ -505,7 +504,7 @@ export namespace Translation {
     export function translateAutonEdit(
       auton: Auton<ActionWithOffset>,
       doc: vscode.TextDocument,
-      edit: AutonEdit.AutonEdit<Action>,
+      edit: AutonEdit.Result.AutonEdit<ActionWithOffset>,
       workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit(),
       reason: string[]
     ): vscode.WorkspaceEdit {
@@ -514,13 +513,22 @@ export namespace Translation {
       const isMove = AutonEdit.TypeGuards.isMove(edit);
       if (!isReplace && !isModify && !isMove) return workspaceEdit;
 
-      const adjustEdits: AutonEdit.Modify<ActionWithOffset>[] = [];
+      const adjustEdits: (
+        | AutonEdit.Modify<ActionWithOffset>
+        | OffsetAdjustment
+      )[] = [];
       if (isMove) {
+        const movedElementsIndex =
+          1 +
+          edit.insertionIndex -
+          (edit.insertionIndex > edit.sourceStart
+            ? edit.sourceEnd - edit.sourceStart
+            : 0);
         const sourceOffsets = {
-          offset: auton.auton[edit.insertionIndex].offset,
+          offset: auton.auton[movedElementsIndex].offset,
           endOffset:
             auton.auton[
-              edit.insertionIndex + edit.sourceEnd - edit.sourceStart - 1
+              movedElementsIndex + edit.sourceEnd - edit.sourceStart - 1
             ].endOffset,
         };
         const sourceRange: vscode.Range = upgradeOffsetsToRange(
@@ -529,9 +537,9 @@ export namespace Translation {
         );
         const sourceLength = sourceOffsets.endOffset - sourceOffsets.offset;
         let targetOffsets = {
-          offset: auton.auton[edit.insertionIndex - 1]?.endOffset ?? 0,
+          offset: auton.auton[movedElementsIndex - 1]?.endOffset ?? 0,
           endOffset:
-            auton.auton[edit.insertionIndex + edit.sourceEnd - edit.sourceStart]
+            auton.auton[movedElementsIndex + edit.sourceEnd - edit.sourceStart]
               ?.offset ?? Infinity,
         };
         // if (sourceOffsets.endOffset < targetOffsets.offset) {
@@ -554,12 +562,46 @@ export namespace Translation {
           newText
         );
 
+        adjustEdits.push(
+          ...auton.auton
+            .slice(
+              movedElementsIndex,
+              movedElementsIndex + edit.sourceEnd - edit.sourceStart
+            )
+            .reverse()
+            .map((act): AutonEdit.Modify<ActionWithOffset> => {
+              let _offset =
+                targetOffsets.offset +
+                act.offset -
+                auton.auton[movedElementsIndex].offset -
+                (edit.insertionIndex > edit.sourceEnd
+                  ? sourceOffsets.endOffset - sourceOffsets.offset
+                  : deletedOffsets.offset - sourceOffsets.offset - 1);
+              return {
+                newProperties: {
+                  endOffset: _offset + act.endOffset - act.offset,
+                  offset: _offset,
+                },
+                reason: reason.concat(
+                  "server.translator.translateEdit.adjustOffset"
+                ),
+                uuid: act.uuid,
+              };
+            })
+        );
+
         // must fix offsets of any actions after start source index and before end target index
         const offsetAdjustment =
-          deletedOffsets.endOffset - deletedOffsets.offset;
+          deletedOffsets.endOffset - deletedOffsets.offset + 1;
         for (
-          let index = Math.min(edit.sourceEnd, edit.insertionIndex);
-          index < Math.max(edit.sourceStart, edit.insertionIndex);
+          let index =
+            edit.sourceEnd < edit.insertionIndex
+              ? edit.sourceStart
+              : movedElementsIndex + edit.sourceEnd - edit.sourceStart;
+          index <
+          (edit.sourceEnd < edit.insertionIndex
+            ? movedElementsIndex
+            : edit.sourceStart + edit.sourceEnd - edit.sourceStart);
           index++
         ) {
           const act = auton.auton[index];
@@ -582,6 +624,7 @@ export namespace Translation {
         }
         // return workspaceEdit;
       } else {
+        // isModify || isReplace
         const editIndex =
           "index" in edit
             ? edit.index
@@ -599,21 +642,11 @@ export namespace Translation {
             ? edit.action
             : [edit.action]
           : // { ...this.auton[index], ...mod.newProperties }
-            [{ ...affectedAutonActs[0], ...edit.newProperties } as Action];
-        // removes text associated with the actions that will be deleted
-        for (const deletedAct of affectedAutonActs
-          // if action is modified, we do not want to remove it
-          .filter(
-            ({ uuid, type }) =>
-              !editActs.some(
-                ({ uuid: newUUID, type: newType }) =>
-                  newUUID === uuid && type === newType
-              )
-          ))
-          workspaceEdit.delete(doc.uri, upgradeOffsetsToRange(deletedAct, doc));
+            affectedAutonActs;
 
         /** where should the next edit be written (used for new actions) */
-        let writeOffset: number = auton.auton.at(editIndex)?.offset ?? 0;
+        let writeOffset: number =
+          auton.auton.at(Math.max(editIndex - 1, 0))?.offset ?? 0;
 
         // either modify or create new action
         for (const newAct of editActs) {
@@ -625,62 +658,296 @@ export namespace Translation {
             )) !== undefined
           )
             // update existing action's params
-            updateActionParams(
-              { ...modifiedAct, params: newAct.params } as ActionWithOffset,
-              doc,
-              workspaceEdit
+            adjustEdits.push(
+              updateActionParams(
+                { ...modifiedAct, params: newAct.params } as ActionWithOffset,
+                doc,
+                workspaceEdit
+              )
             );
           else {
             // add new action's text to document
-            workspaceEdit.insert(
-              doc.uri,
-              doc.positionAt(writeOffset),
-              generateTextForAction(newAct)
+            const newText = generateTextForAction(newAct);
+            const actualNewTextLength = newText.trimStart().length;
+            const newActOffset =
+              writeOffset + newText.length - actualNewTextLength;
+            const newActEndOffset = newActOffset + actualNewTextLength;
+            adjustEdits.push(
+              {
+                uuid: newAct.uuid,
+                newProperties: {
+                  offset: newActOffset,
+                  endOffset: newActEndOffset,
+                },
+                reason: reason.concat(
+                  "server.translator.translateAutonEdit.newOffsets"
+                ),
+              },
+              OffsetAdjustment.addNewAction(
+                auton.getIndexFromId(newAct.uuid) + 1,
+                newText.length
+              )
             );
+
+            workspaceEdit.insert(doc.uri, doc.positionAt(writeOffset), newText);
           }
           // update next action location
           writeOffset += workspaceEdit.get(doc.uri).at(-1)?.newText.length ?? 0;
         }
+
+        // removes text associated with the actions that will be deleted
+        if (isReplace)
+          edit.deletedActs.forEach((act) =>
+            adjustEdits.push(
+              OffsetAdjustment.removeAction(act, workspaceEdit, doc)
+            )
+          );
       }
-      auton.makeEdit(adjustEdits);
+      auton.makeEdit(
+        adjustEdits.flatMap((adjust) =>
+          AutonEdit.TypeGuards.isModify(adjust)
+            ? adjust
+            : OffsetAdjustment.fillCreateEdits(adjust, {
+                auton,
+                reason: reason.concat("server.translator.translateAutonEdit"),
+              })
+        )
+      );
       return workspaceEdit;
     }
+    export class OffsetAdjustment {
+      public auton?: Auton<ActionWithOffset>;
+      public start?: number | UUID;
+      public end?: number | UUID;
+      public reason?: string[];
+      constructor(
+        public readonly adjuster: typeof OffsetAdjustment.Adjuster.prototype
+      ) {}
+      static changeActionLength(
+        action: UUID,
+        change: number
+      ): OffsetAdjustment {
+        let adjustment = new OffsetAdjustment(
+          new this.Adjuster.SemiDynamic(
+            new this.Adjuster.Constant(change),
+            Object.fromEntries([
+              [
+                action,
+                new this.Adjuster.Dynamic(({ offset, endOffset }) => {
+                  return { offset, endOffset: endOffset + change };
+                }),
+              ],
+            ])
+          )
+        );
+        adjustment.start = action;
+        return adjustment;
+      }
+      static addNewAction(
+        actionIndex: number,
+        newTextLength: number
+      ): OffsetAdjustment {
+        let adjustment = new OffsetAdjustment(
+          new this.Adjuster.Constant(newTextLength)
+        );
+        adjustment.start = actionIndex;
+        return adjustment;
+      }
+      /**
+       * @description updates workspaceEdit and creates a OffsetAdjustment representing removal of action
+       *
+       * @param workspaceEdit removes text that represents action from doc
+       * @param doc document containing action
+       *
+       * @returns OffsetAdjustment representing removal of action
+       */
+      static removeAction(
+        {
+          uuid,
+          offset,
+          endOffset,
+        }: Pick<ActionWithOffset, "uuid" | "offset" | "endOffset">,
+        workspaceEdit: vscode.WorkspaceEdit,
+        doc: vscode.TextDocument
+      ): OffsetAdjustment {
+        const newOffset = offset - doc.positionAt(offset).character - 1;
+        let adjustment = new OffsetAdjustment(
+          new this.Adjuster.Constant(newOffset - endOffset)
+        );
+        workspaceEdit.delete(
+          doc.uri,
+          upgradeOffsetsToRange({ offset: newOffset, endOffset }, doc)
+        );
+        adjustment.start = uuid;
+        return adjustment;
+      }
+      public static fill(
+        adjustment: OffsetAdjustment,
+        filling: {
+          [k in keyof Omit<
+            OffsetAdjustment,
+            "adjuster" | "end" | "start"
+          >]-?: OffsetAdjustment[k];
+        } & {
+          [k in keyof Pick<
+            OffsetAdjustment,
+            "end" | "start"
+          >]?: OffsetAdjustment[k];
+        }
+      ): Parameters<typeof OffsetAdjustment.createEdits>[0] {
+        adjustment.auton ??= filling.auton;
+        adjustment.start ??= filling?.start ?? 0;
+        adjustment.end ??= filling?.end ?? adjustment.auton.auton.length;
+        adjustment.reason ??= filling.reason;
+        if (typeof adjustment.start === "string")
+          adjustment.start = adjustment.auton.getIndexFromId(adjustment.start);
+        if (typeof adjustment.end === "string")
+          adjustment.end = adjustment.auton.getIndexFromId(adjustment.end);
+        return adjustment as Parameters<typeof OffsetAdjustment.createEdits>[0];
+      }
+      public static createEdits({
+        auton,
+        start,
+        end,
+        adjuster,
+        reason,
+      }: {
+        [k in keyof OffsetAdjustment]-?: Exclude<OffsetAdjustment[k], UUID>;
+      }): AutonEdit.Modify<ActionWithOffset>[] {
+        return auton.auton
+          .slice(start, end)
+          .map((act, index): AutonEdit.Modify<ActionWithOffset> => {
+            return {
+              newProperties: adjuster.adjust(act),
+              index,
+              reason: reason.concat(
+                "server.translator.createAdjustOffsetEdits.adjustOffset"
+              ),
+            };
+          });
+      }
+      public static fillCreateEdits(
+        adjustment: OffsetAdjustment,
+        filling: Parameters<typeof OffsetAdjustment.fill>[1]
+      ): AutonEdit.Modify<ActionWithOffset>[] {
+        return this.createEdits(this.fill(adjustment, filling));
+      }
+      static Adjuster = class Adjuster {
+        adjust({
+          offset,
+          endOffset,
+          uuid,
+        }: {
+          offset: number;
+          endOffset: number;
+          uuid: UUID;
+        }): {
+          offset: number;
+          endOffset: number;
+        } {
+          throw "Method Unimplemented";
+        }
+        static Constant = class Constant extends Adjuster {
+          constructor(public readonly adjustment: number) {
+            super();
+          }
+          adjust({ offset, endOffset }: { offset: number; endOffset: number }) {
+            return {
+              offset: offset + this.adjustment,
+              endOffset: endOffset + this.adjustment,
+            };
+          }
+        };
+        static Dynamic = class Dynamic extends Adjuster {
+          constructor(
+            public readonly adjust: ({
+              offset,
+              endOffset,
+              uuid,
+            }: {
+              offset: number;
+              endOffset: number;
+              uuid: UUID;
+            }) => {
+              offset: number;
+              endOffset: number;
+            }
+          ) {
+            super();
+          }
+        };
+        static SemiDynamic = class SemiDynamic extends Adjuster {
+          constructor(
+            public readonly defaultAdjuster: Adjuster,
+            public readonly adjusterMap: {
+              [k: UUID]: Adjuster;
+            }
+          ) {
+            super();
+          }
+          adjust({
+            offset,
+            endOffset,
+            uuid,
+          }: {
+            uuid: UUID;
+            offset: number;
+            endOffset: number;
+          }) {
+            return (
+              uuid in this.adjusterMap
+                ? this.adjusterMap[uuid]
+                : this.defaultAdjuster
+            ).adjust({
+              offset,
+              endOffset,
+              uuid,
+            });
+          }
+        };
+      };
+    }
     /**
-     * adds a replace {@link vscode.TextEdit TextEdit } to workspaceEdit that \t updates the params
+     * adds a replace {@link vscode.TextEdit TextEdit } to workspaceEdit that updates the params
      */
     export function updateActionParams(
       action: ActionWithOffset,
       doc: vscode.TextDocument,
       workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit()
-    ): vscode.WorkspaceEdit {
+    ): OffsetAdjustment {
       const currentText: string = doc.getText(
         upgradeOffsetsToRange(action, doc)
       );
-      Object.entries(action.groupIndices)
-        .filter(([group]) => !group.startsWith("_"))
-        // remove type from group and get param name
-        .map(([group, indices]): [string, [number, number]] => [
-          group.split("_").slice(1).join(""),
-          indices,
-        ])
-        .forEach(([group, [start, end]]) => {
-          const newText: string | undefined = (
-            action.params as {
-              [k: string]: boolean | number | string | undefined;
-            }
-          )[group]?.toString();
-          if (
-            newText &&
-            newText !==
-              currentText.slice(start - action.offset, end - action.offset)
-          )
-            workspaceEdit.replace(
-              doc.uri,
-              upgradeOffsetsToRange(action, doc),
-              newText
+      return OffsetAdjustment.changeActionLength(
+        action.uuid,
+        Object.entries(action.groupIndices)
+          .filter(([group]) => !group.startsWith("_"))
+          // remove type from group and get param name
+          .map(([group, indices]): [string, [number, number]] => [
+            group.split("_").slice(1).join(""),
+            indices,
+          ])
+          .reduce((offsetAdjustment, [group, [start, end]]) => {
+            const newText: string | undefined = (
+              action.params as {
+                [k: string]: boolean | number | string | undefined;
+              }
+            )[group]?.toString();
+            const currText = currentText.slice(
+              start - action.offset,
+              end - action.offset
             );
-        });
-      return workspaceEdit;
+            if (newText && newText !== currText) {
+              workspaceEdit.replace(
+                doc.uri,
+                upgradeOffsetsToRange(action, doc),
+                newText
+              );
+              offsetAdjustment += newText.length - currText.length;
+            }
+            return offsetAdjustment;
+          }, 0)
+      );
     }
     /**
      * generates text for an action
@@ -729,3 +996,5 @@ export namespace Translation {
     }
   }
 }
+
+// 1000 lines

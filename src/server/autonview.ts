@@ -132,18 +132,23 @@ export class AutonTreeProvider
     if (
       target?.id !== treeItems[0] &&
       (target === undefined ||
-        this.data[this.data.indexOf(target) - 1]?.id !== treeItems[0])
+        this.data[this.data.indexOf(target) + 1]?.id !== treeItems[0])
     )
       try {
+        // index of element that treeItems should go under
+        let targetIndex = target
+          ? this.auton.auton.findIndex((e) => target.id == e.uuid)
+          : this.data.length;
+        let firstTreeItemIndex = this.auton.auton.findIndex(
+          (e) => treeItems[0] == e.uuid
+        );
+        // index directly after last treeItem's index
+        let indexAfterTreeItems =
+          this.auton.auton.findIndex((e) => treeItems.at(-1) == e.uuid) + 1;
         this.auton.makeEdit({
-          insertionIndex: target
-            ? this.auton.auton.findIndex((e) => target.id == e.uuid)
-            : this.data.length,
-          sourceStart: this.auton.auton.findIndex(
-            (e) => treeItems[0] == e.uuid
-          ),
-          sourceEnd:
-            this.auton.auton.findIndex((e) => treeItems.at(-1) == e.uuid) + 1,
+          insertionIndex: targetIndex,
+          sourceStart: firstTreeItemIndex,
+          sourceEnd: indexAfterTreeItems,
           reason: ["server.view.handleDrop"],
         });
       } catch (error) {

@@ -129,7 +129,9 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     wEdit
       .entries()
       .forEach(([uri, edits]) => this.getDocInfo(uri).edits.push(...edits));
-    vscode.workspace.applyEdit(wEdit);
+    (function whyIsThisLikeThis(bool: boolean) {
+      if (!bool) vscode.workspace.applyEdit(wEdit).then(whyIsThisLikeThis);
+    })(false);
   }
   /**
    * Finds whether change is due to {@link AutonEditorProvider this} and if so removes corresponding edits from {@link documentInfo}
@@ -252,20 +254,20 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       msg: typeof Message.ToExtension.Edit.prototype;
     }): void {
       // interpret auton edit as a workspace edit and then apply the workspace edit
-      this.editorProvider.applyWorkspaceEdit(
-        msg.edit.reduce((accumulator: vscode.WorkspaceEdit, edit) => {
-          const workspaceEdit = Translation.AutonToCpp.translateAutonEdit(
-            this.editorProvider.getAuton(
-              document
-            ) as unknown as Auton<Translation.ActionWithOffset>,
-            document,
-            edit,
-            accumulator,
-            edit.reason.concat("server.editor.msgListeners.onEdit")
-          );
-          return workspaceEdit;
-        }, new vscode.WorkspaceEdit())
-      );
+      // this.editorProvider.applyWorkspaceEdit(
+      //   msg.edit.reduce((accumulator: vscode.WorkspaceEdit, edit) => {
+      //     const workspaceEdit = Translation.AutonToCpp.translateAutonEdit(
+      //       this.editorProvider.getAuton(
+      //         document
+      //       ) as unknown as Auton<Translation.ActionWithOffset>,
+      //       document,
+      //       edit,
+      //       accumulator,
+      //       edit.reason.concat("server.editor.msgListeners.onEdit")
+      //     );
+      //     return workspaceEdit;
+      //   }, new vscode.WorkspaceEdit())
+      // );
     }
   })(this);
 
@@ -407,15 +409,15 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
             document
           ) as unknown as Auton<Translation.ActionWithOffset>,
           document,
-          edit,
+          edit as AutonEdit.Result.AutonEdit<Translation.ActionWithOffset>,
           new vscode.WorkspaceEdit(),
-          edit.reason.concat("server.editor.msgListeners.onEdit")
+          edit.reason.concat("server.editor.eventListener.onEdit")
         )
       );
       this.editorProvider.postEdits(webviewPanel, [
         {
           ...edit,
-          reason: edit.reason.concat("server.editor.msgListeners.onEdit"),
+          reason: edit.reason.concat("server.editor.eventListener.onEdit"),
         },
       ]);
     }
