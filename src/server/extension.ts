@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 // import { CatScratchEditorProvider } from './catScratchEditor';
 import { AutonEditorProvider } from "./autonEditor";
-import { AutonTreeProvider } from "./autonview";
+import { AutonTreeProvider } from "./autonTreeView";
 
 export function activate(context: vscode.ExtensionContext) {
   // create Auton List View

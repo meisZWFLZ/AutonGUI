@@ -1,11 +1,13 @@
 import * as vscode from "vscode";
 import { getNonce } from "./util";
 import Message from "../common/message";
-import Auton, { AutonEdit } from "../common/auton";
+import Auton, { AutonData, AutonEdit } from "../common/auton";
 import { Translation } from "./translator";
-import { AutonTreeProvider, TreeItem } from "./autonview";
+import { AutonTreeProvider, TreeItem } from "./autonTreeView";
 import { Action } from "../common/action";
 import { ISimpleEvent } from "strongly-typed-events";
+import { join } from "path";
+import { UUID } from "crypto";
 
 type CppAuton = Auton<Translation.CppAction>;
 type DocumentInfo = {
@@ -185,7 +187,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         new Message.ToWebview.AutonUpdate(
           AutonEditorProvider.autonView.setAuton(
             this.setAuton(document, AutonEditorProvider.translateDoc(document))
-          ) as unknown as Auton,
+          ).auton as unknown as AutonData,
           0
         )
       );
@@ -251,7 +253,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     }: {
       webviewPanel: vscode.WebviewPanel;
       document: vscode.TextDocument;
-      msg: typeof Message.ToExtension.Edit.prototype;
+      msg: typeof Message.ToExtension.Modify.prototype;
     }): void {
       // interpret auton edit as a workspace edit and then apply the workspace edit
       // this.editorProvider.applyWorkspaceEdit(
@@ -286,7 +288,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       this.msgListeners.onReady({ webviewPanel, document, msg });
     else if (ToExt.IndexUpdate.test(msg))
       this.msgListeners.onUpdateIndex({ webviewPanel, document, msg });
-    else if (ToExt.Edit.test(msg))
+    else if (ToExt.Modify.test(msg))
       this.msgListeners.onEdit({ webviewPanel, document, msg });
   }
 
@@ -442,6 +444,15 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           Translation.AutonToCpp.upgradeOffsetsToRange(act, document)
         )
         .map(({ end, start }) => new vscode.Selection(start, end));
+
+      this.editorProvider.postMessage(
+        webviewPanel,
+        new Message.ToWebview.IndexUpdate(
+          this.editorProvider
+            .getAuton(document)
+            .getIndexFromId(selection[0]!.id as UUID)
+        )
+      );
     }
     onAutonViewRefresh({
       webviewPanel,
@@ -462,13 +473,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   private getHtmlForWebview(webview: vscode.Webview): string {
     // Local path to script and css for the webview
     const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(
-        this._context.extensionUri,
-        "out",
-        "webview",
-        "webview",
-        "wflAuton.js"
-      )
+      vscode.Uri.joinPath(this._context.extensionUri, "dist", "main.bundle.js")
     );
 
     const styleResetUri = webview.asWebviewUri(
@@ -535,8 +540,8 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     // 	<button data-color="green" class="green" title="Green"></button>
     // 	<button data-color="blue" class="blue" title="Blue"></button>
     // </div>
-  }
-  			<script type="module" nonce="${nonce}" src="${scriptUri}"></script>
+  }   
+  			<script nonce="${nonce}" src="${scriptUri}"></script>
   			</body>
   			</html>`;
   }

@@ -3,7 +3,8 @@ import {
   TextDocumentContentChangeEvent,
   TextEditorEdit,
 } from "vscode";
-import Auton, { AutonEdit } from "./auton";
+import Auton, { AutonData, AutonEdit } from "./auton";
+import { Action } from "./action";
 // import { ListAction } from "../webview/eventList.js";
 // import { Node } from "./node.js";
 
@@ -25,7 +26,7 @@ export enum MSG_WEBVIEW_TYPE {
  * type of message sent to extension
  */
 export enum MSG_EXTENSION_TYPE {
-  EDIT,
+  MODIFY,
   UPDATE_AUTON_INDEX,
   READY,
   // GET_FILE_RESPONSE,
@@ -81,7 +82,7 @@ export default class Message {
       public override readonly type: MSG_WEBVIEW_TYPE.UPDATE_AUTON =
         MSG_WEBVIEW_TYPE.UPDATE_AUTON;
       constructor(
-        public readonly newAuton: Auton,
+        public readonly newAuton: AutonData,
         public readonly newIndex: number,
         id?: number
       ) {
@@ -160,14 +161,17 @@ export default class Message {
     constructor(public readonly type: MSG_EXTENSION_TYPE, id?: number) {
       super(MSG_TARGET.EXTENSION, id);
     }
-    static Edit = class Edit extends ToExtension {
-      public static test(msg: Message): msg is Edit {
-        return ToExtension.test(msg) && msg.type === MSG_EXTENSION_TYPE.EDIT;
+    static Modify = class Modify extends ToExtension {
+      public static test(msg: Message): msg is Modify {
+        return ToExtension.test(msg) && msg.type === MSG_EXTENSION_TYPE.MODIFY;
       }
-      public override readonly type: MSG_EXTENSION_TYPE.EDIT =
-        MSG_EXTENSION_TYPE.EDIT;
-      constructor(public readonly edit: AutonEdit.AutonEdit[], id?: number) {
-        super(MSG_EXTENSION_TYPE.EDIT, id);
+      public override readonly type: MSG_EXTENSION_TYPE.MODIFY =
+        MSG_EXTENSION_TYPE.MODIFY;
+      constructor(
+        public readonly mod: AutonEdit.Modify<Action>[],
+        id?: number
+      ) {
+        super(MSG_EXTENSION_TYPE.MODIFY, id);
       }
     };
     static IndexUpdate = class IndexUpdate extends ToExtension {

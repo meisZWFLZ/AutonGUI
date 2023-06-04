@@ -15,8 +15,14 @@ import {
   BaseAction,
   Wait,
 } from "./action.js";
-import { UUID, randomUUID } from "crypto";
-import { SimpleEventDispatcher, SignalDispatcher } from "strongly-typed-events";
+import { SimpleEventDispatcher } from "ste-simple-events";
+import { SignalDispatcher } from "ste-signals";
+import { UUID } from "crypto";
+import { v4 as uuidV4 } from "uuid";
+
+function randomUUID(): UUID {
+  return uuidV4() as UUID;
+}
 
 export type AutonData<A extends BaseAction<{}> = Action> = [
   SetPose & A,
@@ -408,7 +414,7 @@ export namespace AutonEdit {
         "index" in obj &&
         Number.isInteger(obj.index) &&
         "count" in obj &&
-        Number.isInteger(obj.count) &&
+        (Number.isInteger(obj.count) || !Number.isFinite(obj.count)) &&
         !isModify(obj) &&
         !isMove(obj)
       );

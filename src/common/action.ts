@@ -1,5 +1,5 @@
 import { UUID } from "crypto";
-import { Position } from "./coordinates";
+import { Position } from "./coordinates.js";
 
 export namespace BaseAction {
   export type Params = {};

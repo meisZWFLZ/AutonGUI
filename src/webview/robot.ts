@@ -174,5 +174,6 @@ export class Robot {
     // could be changed for custom robot length
     // this.#lengthIRL = 18;
     this.#radiusIRL = 16.25 / 2; // half or length
+    // rectangular robot bounding box formula: https://www.desmos.com/calculator/2l4skiytvz
   }
 }

@@ -12,6 +12,7 @@ import {
 import Auton, { AutonEdit } from "../common/auton";
 import { isNativeError } from "util/types";
 import { SignalDispatcher } from "strongly-typed-events";
+import { UUID } from "crypto";
 
 export class AutonTreeProvider
   implements
@@ -87,7 +88,7 @@ export class AutonTreeProvider
   getTreeItem(element: TreeItem): TreeItem {
     return element;
   }
-  getTreeItemFromId(id: string): TreeItem | undefined {
+  getTreeItemFromId(id: UUID): TreeItem | undefined {
     return this.data.find((e) => e.id === id);
   }
 
@@ -255,7 +256,7 @@ const actionToTreeItem: ActionToTreeItemMap<Action> = {
 type TreeItemProperties = RequireSome<
   { [K in keyof vscode.TreeItem]: vscode.TreeItem[K] },
   "label"
-> & { children?: (TreeItem | TreeItemProperties)[] };
+> & { children?: (TreeItem | TreeItemProperties)[]; id: UUID };
 
 export class TreeItem extends vscode.TreeItem {
   children: TreeItem[] | undefined;

@@ -29,9 +29,6 @@ abstract class DimensionProvider {
    * @example field.getBoundingClientRect()
    */
   public abstract get fieldCoord(): Coordinate;
-  public toJSON() {
-    return undefined;
-  }
 }
 
 abstract class ConvertibleCoordinate implements Coordinate {

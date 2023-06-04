@@ -12,9 +12,9 @@
       "runtimeExecutable": "${execPath}",
       "args": ["--extensionDevelopmentPath=${workspaceRoot}"],
       "outFiles": ["${workspaceFolder}/out/**/*.js"],
-      "preLaunchTask": "npm: compile",
+      "preLaunchTask": "npm: build",
       "internalConsoleOptions": "openOnSessionStart",
-      "debugWebviews":true
+      "debugWebviews": true
     }
   ]
 }

@@ -8,7 +8,8 @@
     "sourceMap": true,
     "strict": true,
     "rootDirs": ["src"],
-    "moduleResolution": "nodenext"
+    "moduleResolution": "nodenext",
+    "incremental": true,
   },
   "include": ["./src/**/*"],
   "exclude": ["node_modules", ".vscode-test"]
