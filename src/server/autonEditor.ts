@@ -488,6 +488,18 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       vscode.Uri.joinPath(this._context.extensionUri, "media", "wflAuton.css")
     );
 
+    const FieldSvgUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(
+        this._context.extensionUri,
+        "media",
+        "SpinUpField.svg"
+      )
+    );
+
+    const RobotSvgUri = webview.asWebviewUri(
+      vscode.Uri.joinPath(this._context.extensionUri, "media", "robot.svg")
+    );
+
     // Use a nonce to whitelist which scripts can be run
     const nonce = getNonce();
 
@@ -514,18 +526,12 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   		<title>Paw Draw</title>
   		</head>
   		<body>
-      <div class="field">
-        <p class="robot"> </p>
-        <div class="index"></div>
-        ${`<div class="canvas_wrapper"><canvas class="mycanvas"> </canvas></div>`}
-        <div class="actions">
-          <button data-action="intake" class="intake" title="Intake"></button>
-          <button data-action="shoot" class="shoot" title="Shoot"></button>
-          <button data-action="piston_shoot" class="piston_shoot" title="Piston Shoot"></button>
-          <button data-action="roller" class="roller" title="Roller"></button>
-          <button data-action="expand" class="expand" title="Expand"></button>
-        </div>
-      </div>
+      <svg width="100%" height="100%" viewBox="-72 -72 144 144" version="1.1" xmlns="http://www.w3.org/2000/svg" class="field-svg">
+  <image x="-72" y="-72" width="144" height="144" href="${FieldSvgUri}" class="field-background"></image>
+  <g transform="scale(1,-1)">
+  <image x="-9" y="-9" width="18" height="18" href="${RobotSvgUri}" class="robot"></image>
+  </g>
+</svg>
 
   ${
     ""

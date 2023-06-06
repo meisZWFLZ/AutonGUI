@@ -9,6 +9,8 @@ import {
   PhysicalPos,
   Position,
 } from "../common/coordinates.js";
+import { GameObject } from "./gameObject.js";
+import { FieldContainer } from "./fieldContainer.js";
 
 console.log("TOP OF WEBVIEW");
 
@@ -16,15 +18,18 @@ console.log("TOP OF WEBVIEW");
 const vscode = acquireVsCodeApi();
 
 class AutonView {
-  robot: Robot;
+  robot: typeof GameObject.Draggable.prototype;
+  fieldContainer: FieldContainer;
 
   constructor(
     protected auton: Auton = Auton.newAutonAtOrigin(),
     protected index: number = 0
   ) {
-    this.robot = new Robot(
+    this.fieldContainer = new FieldContainer(this.html.field);
+    this.robot = new GameObject.Draggable(
       this.html.robot,
-      new PhysicalPos(auton.getStartPos(), this.html.dimProvider)
+      this.fieldContainer,
+      auton.getStartPos()
     );
 
     // end of constructor
@@ -35,7 +40,7 @@ class AutonView {
    * @param index auton index
    * @returns Robot position at {@link index auton index}
    */
-  getRobotPos(index: number = this.index): PhysicalPos {
+  getRobotPos(index: number = this.index): Position {
     let pos: Partial<Position> = {};
     let turnTo: Coordinate | undefined;
     for (const { type, params } of this.auton.auton
@@ -60,64 +65,69 @@ class AutonView {
       }
       if (CoordinateUtilities.isPosition(pos)) break;
     }
-    return new PhysicalPos(
-      { ...{ x: 0, y: 0, heading: 0 }, ...pos },
-      this.html.dimProvider
-    );
+    return { ...{ x: 0, y: 0, heading: 0 }, ...pos };
   }
   /**
    * gets robot pos at current auton index and moves robot to it
    */
-  reCalculateRobotPos() {
+  reCalculateRobotPos(reason: string[]) {
     try {
-      this.robot.goTo(this.getRobotPos());
+      this.robot.animateMove(
+        this.getRobotPos(),
+        reason.concat("webview.AutonView.reCalculateRobotPos")
+      );
     } catch (e) {
       console.error(e);
     }
     console.log("robot: ", this.getRobotPos());
   }
-  setIndex(newIndex: number) {
+  setIndex(newIndex: number, reason: string[]) {
     if (newIndex === this.index) return;
     this.index = newIndex;
-    this.reCalculateRobotPos();
+    this.reCalculateRobotPos(reason.concat("webview.AutonView.setIndex"));
   }
 
   html = new (class HtmlElements {
-    public readonly index: HTMLElement;
-    public readonly field: HTMLElement;
-    public readonly canvas: HTMLCanvasElement;
-    public readonly actions: HTMLDivElement;
-    public readonly robot: HTMLElement;
+    // public readonly index: HTMLElement;
+    public readonly fieldBackground: SVGImageElement;
+    // public readonly canvas: HTMLCanvasElement;
+    // public readonly actions: HTMLDivElement;
+    public readonly robot: SVGImageElement;
+    public readonly field: SVGSVGElement;
 
-    public readonly dimProvider: DimensionProvider;
+    // public readonly dimProvider: DimensionProvider;
     constructor() {
-      this.actions = this.getElement<HTMLDivElement>(
-        ".actions",
-        "action container"
+      // this.actions = this.getElement<HTMLDivElement>(
+      //   ".actions",
+      //   "action container"
+      // );
+      // this.index = this.getElement<HTMLElement>(".index", "index");
+      // this.canvas = this.getElement<HTMLCanvasElement>(".mycanvas", "canvas");
+      this.field = this.getElement(".field-svg", "field svg");
+      this.robot = this.getElement(".robot", "robot");
+      this.fieldBackground = this.getElement(
+        ".field-background",
+        "field background"
       );
-      this.index = this.getElement<HTMLElement>(".index", "index");
-      this.canvas = this.getElement<HTMLCanvasElement>(".mycanvas", "canvas");
-      this.robot = this.getElement<HTMLElement>(".robot", "robot");
-      this.field = this.getElement<HTMLElement>(".field", "field");
 
-      const els = this;
-      this.dimProvider = {
-        get robotOffsetWidth() {
-          return els.robot.offsetWidth;
-        },
-        get fieldWidth() {
-          return els.field.getBoundingClientRect().width;
-        },
-        get fieldCoord() {
-          return els.field.getBoundingClientRect();
-        },
-      };
+      // const els = this;
+      // this.dimProvider = {
+      //   get robotOffsetWidth() {
+      //     return /* els.robot.offsetWidth */ 0;
+      //   },
+      //   get fieldWidth() {
+      //     return /* els.field.getBoundingClientRect().width */ 0;
+      //   },
+      //   get fieldCoord() {
+      //     return /* els.field.getBoundingClientRect() */ { x: 0, y: 0 };
+      //   },
+      // };
     }
-    private getElement<T extends HTMLElement>(
-      query: string,
-      readableName: string
-    ) {
-      const el: T | null = document.querySelector(query);
+    private getElement<
+      D extends ParentNode,
+      T extends NonNullable<ReturnType<D["querySelector"]>>
+    >(query: string, readableName: string, parent?: D) {
+      const el: T | null = (parent ?? document).querySelector(query);
       if (el == null) throw "no " + readableName.trim() + " element";
       return el;
     }
@@ -130,7 +140,11 @@ class AutonView {
     listener({ data: msg }: { data: Message }) {
       console.log(msg);
       if (Message.ToWebview.Edit.test(msg)) this.onEdit(msg);
-      else if (Message.ToWebview.IndexUpdate.test(msg)) this.onIndexUpdate(msg);
+      else if (Message.ToWebview.IndexUpdate.test(msg))
+        this.onIndexUpdate({
+          ...msg,
+          reason: [],
+        });
       else if (Message.ToWebview.AutonUpdate.test(msg)) this.onAutonUpdate(msg);
     }
     onAutonUpdate({
@@ -167,11 +181,23 @@ class AutonView {
           };
         })
       );
-      this.onIndexUpdate({ newIndex });
+      this.onIndexUpdate({
+        newIndex,
+        reason: edit[0].reason.concat("webview.AutonView.msgHandler.onEdit"),
+      });
     }
-    onIndexUpdate({ newIndex }: { readonly newIndex: number }) {
+    onIndexUpdate({
+      newIndex,
+      reason,
+    }: {
+      readonly newIndex: number;
+      readonly reason: string[];
+    }) {
       console.log("new index: " + newIndex);
-      this.view.setIndex(newIndex);
+      this.view.setIndex(
+        newIndex,
+        reason.concat("webview.AutonView.msgHandler.onIndexUpdate")
+      );
     }
 
     private sendMessage(msg: typeof Message.ToExtension.prototype) {
@@ -193,12 +219,23 @@ class AutonView {
   })(this);
 
   eventListeners = new (class EventListeners {
-    constructor(protected view: AutonView) {}
-
+    constructor(protected view: AutonView) {
+      view.auton.onModifyEdit.sub(this.onAutonModified.bind(this));
+    }
+    onRobotMoved({
+      pos,
+      reason,
+    }: Parameters<Parameters<GameObject["onDidChangePosition"]["sub"]>[0]>[0]) {
+      if (
+        reason.some((r) => r.toLowerCase().startsWith("sever")) ||
+        reason.includes("webview.AutonView.msgHandler.onIndexUpdate")
+      )
+        return;
+    }
     onAutonModified(
       mod: Parameters<Parameters<Auton["_onModifyEdit"]["sub"]>[0]>[0]
     ) {
-      if (mod.reason.some((r) => r.startsWith("server"))) return;
+      if (mod.reason.some((r) => r.toLowerCase().startsWith("server"))) return;
       this.view.msgHandler.sendModify(mod);
     }
   })(this);

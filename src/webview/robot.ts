@@ -60,7 +60,7 @@ export class Robot {
   //     y: (relPos.y + halfRobotWidth) / pxPerInch,
   //   };
   // }
-  robotEl: HTMLElement;
+  robotEl: SVGImageElement;
 
   /**
    * in inches of physical field
@@ -74,13 +74,11 @@ export class Robot {
    * @returns {AbsolutePos}
    */
   getAbsPos(): AbsoluteCoord {
-    const robotBounds = this.robotEl.getBoundingClientRect();
-    const halfRobotWidth = this.robotEl.offsetWidth / 2;
+    // const robotBounds = this.robotEl.getBoundingClientRect();
+    // const halfRobotWidth = this.robotEl.offsetWidth / 2;
     return AbsolutePos.fromCenter(
       {
-        ...this.#setPos,
-        x: robotBounds.left + halfRobotWidth,
-        y: robotBounds.top + halfRobotWidth,
+        x:0,y:0
       },
       this.#pos._dimProvider
     );
@@ -145,15 +143,13 @@ export class Robot {
 
     // console.log(pos);
     const relPos = pos.toRelative();
-    const transform = `translate(${relPos.x}px, ${
-      relPos.y
-    }px)rotate(${(this.#pos.heading %= 360)}deg)`;
-    this.robotEl.animate(
-      [{ transform: this.robotEl.style.transform }, { transform }],
-      {
-        duration: opts.duration,
-      }
-    );
+    ;
+    // this.robotEl.animate(
+    //   [{ transform: this.robotEl.transform }, { transform }],
+    //   {
+    //     duration: opts.duration,
+    //   }
+    // );
     // @ts-ignore
     return (this.robotEl.style.transform = transform);
   }
@@ -166,7 +162,7 @@ export class Robot {
    * @param {{followCursor: boolean}} opts
    */
   constructor(
-    element: HTMLElement,
+    element: SVGImageElement,
     pos: PhysicalPos /* opts = { followCursor: true } */
   ) {
     this.robotEl = element;

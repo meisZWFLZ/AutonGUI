@@ -14,10 +14,10 @@ body {
   flex-direction: column;
 }
  */
-.field {
-  aspect-ratio: 1 / 1;
+/* .field {
+  aspect-ratio: 1 / 1; */
   /* height: 100%; */
-  max-width: 100%;
+  /* max-width: 100%;
   max-height: 100%;
 
   display: flex;
@@ -25,45 +25,45 @@ body {
   align-items: end;
 
   background: url("./SpinUpField.svg") no-repeat;
-  background-size: cover;
+  background-size: cover; */
   /*   background-repeat: no-repeat;
   background-position: center;
   background-size: contain; */
-
+/* 
   user-select: none;
-}
+} */
 
-.canvas_wrapper {
+/* .canvas_wrapper {
   height: 0%;
   width: 0%;
   overflow: visible;
-}
+} */
 
-.mycanvas {
+/* .mycanvas {
   position: absolute;
   top: 0;
   left: 0;
   z-index: 20;
-}
+} */
 
 /* .field:after {
   content: "";
   display: block;
   padding-right: 100%;
 } */
-.robot {
+/* .robot {
   aspect-ratio: 1 / 1;
   width: 8.86153846154%;
   height: 8.86153846154%;
-  position: relative;
+  position: relative; */
   /* transform-origin: 50% 50%; */
   /* transform: translate(100%, -100%) rotate(90deg); */
-  background-image: url("./robot.svg");
+  /* background-image: url("./robot.svg");
   background-repeat: no-repeat;
   background-position: center;
   background-size: 100% 100%;
   z-index: 10;
-}
+} */
 /* .robot:after {
   content: "";
   display: block;
@@ -78,7 +78,7 @@ bottom: 50%;
 z-index:100;
 */
 
-.actions {
+/* .actions {
   position: fixed;
   bottom: 0;
   left: 0;
@@ -88,8 +88,8 @@ z-index:100;
   pointer-events: none;
 
   z-index: 30;
-}
-.index {
+} */
+/* .index {
   position: relative;
   width: 100%;
   height: 100%;
@@ -100,35 +100,35 @@ z-index:100;
   font-size: 3.5em;
 
   user-select: text;
-}
+} */
 
-.actions button {
+/* .actions button {
   position: relative;
   width: 100px;
-  height: 100px;
+  height: 100px; */
   /* background: none; */
   /* border: none; */
-  transform: translateY(30%);
+  /* transform: translateY(30%);
   transition: transform 0.1s linear;
   outline: none;
   opacity: 0.5;
   margin: 0 1.5%;
 
   pointer-events: all;
-}
+} */
 
-.actions button.hidden {
+/* .actions button.hidden {
   transform: translateY(70%);
-}
+} */
 
 /* .actions button:disabled {
   opacity: 0.5;
 } */
-.actions button.active {
+/* .actions button.active {
   opacity: 1;
-}
+} */
 /* .actions button.active:not(:disabled), */
-.actions button:hover {
+/* .actions button:hover {
   transform: translateY(5%) scale(1.15);
 }
 .actions button:active {
@@ -144,7 +144,7 @@ z-index:100;
   left: 0;
   width: 100%;
   height: 100%;
-}
+} */
 
 /* .actions button:before {
 	-webkit-mask: url("./paw-color.svg")  no-repeat 50% 50%;
@@ -155,19 +155,19 @@ z-index:100;
   -webkit-mask: url("./paw-outline.svg") no-repeat 50% 50%;
 } */
 
-.actions button.intake {
+/* .actions button.intake { */
   /* -webkit-mask: url("./actionIcons/intake.svg") no-repeat 50% 50%; */
-  background: url("./actionIcons/intake.svg") no-repeat 50% 50%;
-}
+  /* background: url("./actionIcons/intake.svg") no-repeat 50% 50%;
+} */
 /* .actions button.intake:after {
   -webkit-mask: url("./actionIcons/intake.svg") no-repeat 50% 50%;
   background: url("./actionIcons/intake.svg") no-repeat 50% 50%;
 } */
-.actions button.shoot {
-  background: url("./actionIcons/shoot.svg") no-repeat 50% 50%;
+/* .actions button.shoot {
+  background: url("./actionIcons/shoot.svg") no-repeat 50% 50%; */
   /* -webkit-mask: url("./actionIcons/shoot.svg") no-repeat 50% 50%; */
-}
-.actions button.piston_shoot {
+/* } */
+/* .actions button.piston_shoot {
   background: url("./actionIcons/piston_shoot.svg") no-repeat 50% 50%;
 }
 .actions button.roller {
@@ -175,7 +175,7 @@ z-index:100;
 }
 .actions button.expand {
   background: url("./actionIcons/expand.svg") no-repeat 50% 50%;
-}
+} */
 /* .actions button.black:before {
 	background-color: #333;
 } */

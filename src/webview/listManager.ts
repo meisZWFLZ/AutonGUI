@@ -98,6 +98,7 @@ export default class ListManager {
   ) {
     if (this.list.length <= 0)
       this.list.update([{ position: { x: 0, y: 0 } } as Node]);
+      // @ts-ignore
     this._robot = new Robot(this.els.robot, this.getCurPos());
     this._actionsManager = new ActionsManager(
       this.els.actions,
