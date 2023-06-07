@@ -1,12 +1,9 @@
 import Auton, { AutonData, AutonEdit } from "../common/auton.js";
 import Message from "../common/message.js";
-import { Action, ActionTypeGuards } from "../common/action.js";
-import { Robot } from "./robot.js";
+import { Action } from "../common/action.js";
 import {
   Coordinate,
   CoordinateUtilities,
-  DimensionProvider,
-  PhysicalPos,
   Position,
 } from "../common/coordinates.js";
 import { GameObject } from "./gameObject.js";
@@ -42,16 +39,23 @@ class AutonView {
    */
   getRobotPos(index: number = this.index): Position {
     let pos: Partial<Position> = {};
-    let turnTo: Coordinate | undefined;
+    let turnTo: (Coordinate & { readonly reversed?: boolean }) | undefined;
     for (const { type, params } of this.auton.auton
       .slice(0, index + 1)
       .reverse()) {
       switch (type) {
         case "set_pose":
-          if (!turnTo) pos.heading ??= params.heading;
+          if (!turnTo)
+            pos.heading ??=
+              params.heading * (params.radians ? 180 / Math.PI : 1);
         case "move_to":
           if (turnTo)
-            pos.heading = Math.atan2(params.x - turnTo.x, params.y - turnTo.y);
+            pos.heading =
+              Math.atan2(
+                +params.x + turnTo.x * (turnTo.reversed ? -1 : 1),
+                -params.y - turnTo.y * (turnTo.reversed ? -1 : 1)
+              ) *
+              (180 / Math.PI);
           if (CoordinateUtilities.isCoordinate(pos)) continue;
           pos.x = params.x;
           pos.y = params.y;

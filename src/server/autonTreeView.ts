@@ -71,7 +71,7 @@ export class AutonTreeProvider
 
     this._view = vscode.window.createTreeView("vrc-auton.list-view", {
       treeDataProvider: this,
-      showCollapseAll: true,
+      showCollapseAll: false,
       canSelectMany: true,
       dragAndDropController: this,
     });
@@ -171,6 +171,10 @@ export class AutonTreeProvider
     // 	this._onDidChangeTreeData.fire([...parents, target]);
     // }
   }
+
+  getParent({ id }: TreeItem): vscode.ProviderResult<TreeItem> {
+    return this.data.find(({ id: parentId }) => parentId == id);
+  }
 }
 
 /** makes some of Type's member required  */
@@ -258,8 +262,11 @@ type TreeItemProperties = RequireSome<
   "label"
 > & { children?: (TreeItem | TreeItemProperties)[]; id: UUID };
 
-export class TreeItem extends vscode.TreeItem {
+export class TreeItem extends vscode.TreeItem implements TreeItemProperties {
   children: TreeItem[] | undefined;
+
+  label: TreeItemProperties["label"];
+  id: TreeItemProperties["id"];
 
   public static fromAction<A extends Action["type"]>(
     action: Extract<Action, { type: A }>,
@@ -363,7 +370,8 @@ export class TreeItem extends vscode.TreeItem {
     this.children = children?.map((e) =>
       e instanceof TreeItem ? e : new TreeItem(e)
     );
-
+    this.label = label;
+    this.id = id;
     if (accessibilityInformation)
       this.accessibilityInformation = accessibilityInformation;
     if (collapsibleState) this.collapsibleState = collapsibleState;
@@ -374,6 +382,5 @@ export class TreeItem extends vscode.TreeItem {
     if (id) this.id = id;
     if (resourceUri) this.resourceUri = resourceUri;
     if (tooltip) this.tooltip = tooltip;
-    return this;
   }
 }

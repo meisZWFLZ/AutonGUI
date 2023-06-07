@@ -321,28 +321,35 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     onDidChangeTextEditorSelection({
       webviewPanel,
       document,
-      event,
+      event: {textEditor},
     }: {
       webviewPanel: vscode.WebviewPanel;
       document: vscode.TextDocument;
-      event: vscode.TextEditorSelectionChangeEvent;
+      event: {textEditor: vscode.TextEditor};
     }) {
-      if (event.textEditor.document.uri.toString() !== document.uri.toString())
+      if (textEditor.document.uri.toString() !== document.uri.toString())
         return;
       // interpret selection as an index in the auton array and send to webview
-      const id = this.editorProvider
-        .getAuton(document)
-        .auton.find((act) =>
-          event.selections.some((s) =>
-            s.contains(
-              Translation.AutonToCpp.upgradeOffsetsToRange(act, document)
+
+      this.onDidChangeAutonIndex({
+        webviewPanel,
+        document,
+        newIndex: this.editorProvider
+          .getAuton(document)
+          .auton.filter((act) =>
+            textEditor.selections.some(
+              (s) =>
+                Translation.AutonToCpp.upgradeOffsetsToRange(
+                  act,
+                  document
+                ).intersection(s) !== undefined
             )
           )
-        )?.uuid;
-      if (!id) return;
-      const item = AutonEditorProvider.autonView.getTreeItemFromId(id);
-      if (!item) return;
-      // AutonEditorProvider.autonView.view.reveal(item);
+          .map(({ uuid }) =>
+            this.editorProvider.getAuton(document).getIndexFromId(uuid)
+          ),
+        reason: ["server.editor.eventListener.onDidChangeTextEditorSelection"],
+      });
     }
     onDidChangeTextDocument({
       webviewPanel,
@@ -432,27 +439,14 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       document: vscode.TextDocument;
       event: vscode.TreeViewSelectionChangeEvent<TreeItem>;
     }) {
-      let editor = vscode.window.visibleTextEditors.find(
-        (editor) => editor.document.uri === document.uri
-      );
-      if (!editor) editor = await vscode.window.showTextDocument(document);
-      if (!editor) return;
-      editor.selections = this.editorProvider
-        .getAuton(document)
-        .auton.filter((act) => selection.map((e) => e.id).includes(act.uuid))
-        .map((act) =>
-          Translation.AutonToCpp.upgradeOffsetsToRange(act, document)
-        )
-        .map(({ end, start }) => new vscode.Selection(start, end));
-
-      this.editorProvider.postMessage(
+      this.onDidChangeAutonIndex({
         webviewPanel,
-        new Message.ToWebview.IndexUpdate(
-          this.editorProvider
-            .getAuton(document)
-            .getIndexFromId(selection[0]!.id as UUID)
-        )
-      );
+        document,
+        newIndex: selection.map(({ id }) =>
+          this.editorProvider.getAuton(document).getIndexFromId(id)
+        ),
+        reason: ["server.editor.eventListener.onAutonViewDidChangeSelection"],
+      });
     }
     onAutonViewRefresh({
       webviewPanel,
@@ -462,6 +456,57 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       document: vscode.TextDocument;
     }) {
       this.editorProvider.translateAndSetAuton(document, webviewPanel);
+    }
+    /**
+     * Called by {@link onAutonViewDidChangeSelection} and {@link onDidChangeTextEditorSelection} to synchronize the index between editor, treeView, and webviewPanel
+     */
+    async onDidChangeAutonIndex({
+      newIndex,
+      reason,
+      document,
+      webviewPanel,
+    }: {
+      newIndex: number | number[];
+      reason: string[];
+      webviewPanel: vscode.WebviewPanel;
+      document: vscode.TextDocument;
+    }) {
+      let newIndices = Array.isArray(newIndex) ? newIndex : [newIndex];
+      if (newIndices.length <= 0) return;
+
+      this.editorProvider.postMessage(
+        webviewPanel,
+        new Message.ToWebview.IndexUpdate(newIndices[0])
+      );
+      if (
+        reason[0] !==
+          "server.editor.eventListener.onAutonViewDidChangeSelection" &&
+        vscode.window.activeTextEditor?.document.uri.toString() ===
+          document.uri.toString()
+      )
+        newIndices.forEach((i) => {
+          const item = AutonEditorProvider.autonView.getTreeItemFromId(
+            this.editorProvider.getAuton(document).auton[i].uuid
+          );
+          if (!item) return;
+          AutonEditorProvider.autonView.view.reveal(item, { select: true });
+        });
+      if (
+        reason[0] !==
+          "server.editor.eventListener.onDidChangeTextEditorSelection" &&
+        vscode.window.activeTextEditor?.document.uri.toString() !==
+          document.uri.toString()
+      ) {
+        let editor = vscode.window.visibleTextEditors.find(
+          (editor) => editor.document.uri === document.uri
+        );
+        if (!editor) editor = await vscode.window.showTextDocument(document);
+        if (!editor) return;
+
+        editor.selections = newIndices
+          .map((i) => Translation.AutonToCpp.upgradeOffsetsToRange(this.editorProvider.getAuton(document).auton[i], document))
+          .map(({ end, start }) => new vscode.Selection(start, end));
+      }
     }
   })(this);
 
@@ -526,8 +571,9 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   		<title>Paw Draw</title>
   		</head>
   		<body>
-      <svg width="100%" height="100%" viewBox="-72 -72 144 144" version="1.1" xmlns="http://www.w3.org/2000/svg" class="field-svg">
-  <image x="-72" y="-72" width="144" height="144" href="${FieldSvgUri}" class="field-background"></image>
+      <!-- 140.4 is the field length as defined in VRC Over Under Game Manual: Page A8 -->
+      <svg width="100%" height="100%" viewBox="-70.2 -70.2 140.4 140.4" version="1.1" xmlns="http://www.w3.org/2000/svg" class="field-svg">
+  <image x="-70.2" y="-70.2" width="140.4" height="140.4" href="${FieldSvgUri}" class="field-background"></image>
   <g transform="scale(1,-1)">
   <image x="-9" y="-9" width="18" height="18" href="${RobotSvgUri}" class="robot"></image>
   </g>

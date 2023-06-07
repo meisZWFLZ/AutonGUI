@@ -39,8 +39,8 @@ export namespace Translation {
         type: "string" | "bool" | "int" | "float";
         opt?: boolean;
       };
-      export const FLOAT: RegExp = /(?:\d*\.)?\d+/;
-      export const INT: RegExp = /\d+/;
+      export const FLOAT: RegExp = /[+-]?(?:\d*\.)?\d+/;
+      export const INT: RegExp = /[+-]?\d+/;
       export const BOOLEAN: RegExp = /true|false|0|1/;
       export const STRING: RegExp = /".*"/;
       export const LINE_COMMENT: RegExp = /\/\/.*$/;
