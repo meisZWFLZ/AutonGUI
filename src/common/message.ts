@@ -54,7 +54,7 @@ export default class Message {
         MSG_WEBVIEW_TYPE.EDIT;
       constructor(
         public readonly edit: AutonEdit.AutonEdit[],
-        public readonly newIndex: number,
+        public readonly newIndex?: number,
         id?: number
       ) {
         super(MSG_WEBVIEW_TYPE.EDIT, id);
@@ -168,7 +168,7 @@ export default class Message {
       public override readonly type: MSG_EXTENSION_TYPE.MODIFY =
         MSG_EXTENSION_TYPE.MODIFY;
       constructor(
-        public readonly mod: AutonEdit.Modify<Action>[],
+        public readonly mod: AutonEdit.Result.Modify<Action>[],
         id?: number
       ) {
         super(MSG_EXTENSION_TYPE.MODIFY, id);

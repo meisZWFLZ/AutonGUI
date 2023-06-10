@@ -9,13 +9,18 @@ import {
 import { GameObject } from "./gameObject.js";
 import { FieldContainer } from "./fieldContainer.js";
 
-console.log("TOP OF WEBVIEW");
+function webviewLog(...params: Parameters<typeof console.log>) {
+  console.log("wv: ", ...params);
+}
+
+webviewLog("TOP OF WEBVIEW");
 
 // @ts-ignore
 const vscode = acquireVsCodeApi();
 
 class AutonView {
   robot: typeof GameObject.Draggable.prototype;
+  turnToTarget: typeof GameObject.Draggable.prototype;
   fieldContainer: FieldContainer;
 
   constructor(
@@ -26,11 +31,21 @@ class AutonView {
     this.robot = new GameObject.Draggable(
       this.html.robot,
       this.fieldContainer,
-      auton.getStartPos()
+      auton.getStartPos(),
+      { draggable: true }
     );
-
+    this.turnToTarget = new GameObject.Draggable(
+      this.html.turnTo,
+      this.fieldContainer,
+      auton.getStartPos(),
+      { draggable: false, visibility: "hidden" }
+    );
     // end of constructor
+    this.eventListeners.onAutonViewConstructed();
     this.msgHandler.sendReady();
+  }
+  get curAct() {
+    return this.auton.auton[this.index];
   }
   /**
    * Gets robot position at index
@@ -52,8 +67,8 @@ class AutonView {
           if (turnTo)
             pos.heading =
               Math.atan2(
-                +params.x + turnTo.x * (turnTo.reversed ? -1 : 1),
-                -params.y - turnTo.y * (turnTo.reversed ? -1 : 1)
+                (turnTo.x - params.x) * (turnTo.reversed ? -1 : 1),
+                (turnTo.y - params.y) * (turnTo.reversed ? 1 : -1)
               ) *
               (180 / Math.PI);
           if (CoordinateUtilities.isCoordinate(pos)) continue;
@@ -83,12 +98,33 @@ class AutonView {
     } catch (e) {
       console.error(e);
     }
-    console.log("robot: ", this.getRobotPos());
+    webviewLog("robot: ", this.getRobotPos());
   }
   setIndex(newIndex: number, reason: string[]) {
-    if (newIndex === this.index) return;
     this.index = newIndex;
     this.reCalculateRobotPos(reason.concat("webview.AutonView.setIndex"));
+    switch (this.curAct.type) {
+      case "move_to":
+      case "set_pose":
+        this.robot.draggable = true;
+        this.turnToTarget.draggable = false;
+        this.turnToTarget.hide();
+        break;
+      case "turn_to":
+        this.turnToTarget.setPosition(
+          this.curAct.params,
+          reason.concat("webview.AutonView.setIndex")
+        );
+        this.turnToTarget.show();
+        this.turnToTarget.draggable = true;
+        this.robot.draggable = false;
+        break;
+      default:
+        this.robot.draggable = false;
+        this.turnToTarget.draggable = false;
+        this.turnToTarget.hide();
+        break;
+    }
   }
 
   html = new (class HtmlElements {
@@ -97,6 +133,7 @@ class AutonView {
     // public readonly canvas: HTMLCanvasElement;
     // public readonly actions: HTMLDivElement;
     public readonly robot: SVGImageElement;
+    public readonly turnTo: SVGImageElement;
     public readonly field: SVGSVGElement;
 
     // public readonly dimProvider: DimensionProvider;
@@ -109,6 +146,7 @@ class AutonView {
       // this.canvas = this.getElement<HTMLCanvasElement>(".mycanvas", "canvas");
       this.field = this.getElement(".field-svg", "field svg");
       this.robot = this.getElement(".robot", "robot");
+      this.turnTo = this.getElement(".turn-to", "turnTo target");
       this.fieldBackground = this.getElement(
         ".field-background",
         "field background"
@@ -142,7 +180,7 @@ class AutonView {
       window.addEventListener("message", this.listener.bind(this));
     }
     listener({ data: msg }: { data: Message }) {
-      console.log(msg);
+      webviewLog(msg);
       if (Message.ToWebview.Edit.test(msg)) this.onEdit(msg);
       else if (Message.ToWebview.IndexUpdate.test(msg))
         this.onIndexUpdate({
@@ -175,7 +213,7 @@ class AutonView {
       newIndex,
     }: {
       readonly edit: AutonEdit.AutonEdit[];
-      readonly newIndex: number;
+      readonly newIndex?: number;
     }) {
       this.view.auton.makeEdit(
         edit.map((e) => {
@@ -186,7 +224,7 @@ class AutonView {
         })
       );
       this.onIndexUpdate({
-        newIndex,
+        newIndex: newIndex ?? this.view.index,
         reason: edit[0].reason.concat("webview.AutonView.msgHandler.onEdit"),
       });
     }
@@ -197,7 +235,7 @@ class AutonView {
       readonly newIndex: number;
       readonly reason: string[];
     }) {
-      console.log("new index: " + newIndex);
+      webviewLog("new index: " + newIndex);
       this.view.setIndex(
         newIndex,
         reason.concat("webview.AutonView.msgHandler.onIndexUpdate")
@@ -208,10 +246,10 @@ class AutonView {
       vscode.postMessage(msg);
     }
     public sendModify(
-      mod: AutonEdit.Modify<Action>[] | AutonEdit.Modify<Action>
+      mod: Omit<AutonEdit.Result.Modify<Action>, "index" | "uuid">
     ) {
       this.sendMessage(
-        new Message.ToExtension.Modify(Array.isArray(mod) ? mod : [mod])
+        new Message.ToExtension.Modify([{ ...mod, index: this.view.index }])
       );
     }
     public sendIndexUpdate(newIndex: number) {
@@ -223,18 +261,77 @@ class AutonView {
   })(this);
 
   eventListeners = new (class EventListeners {
+    private static maxTimeBetweenModMessages = 250;
+
     constructor(protected view: AutonView) {
       view.auton.onModifyEdit.sub(this.onAutonModified.bind(this));
     }
+    onAutonViewConstructed() {
+      this.view.robot.onDidChangePosition.sub(this.onRobotMoved.bind(this));
+      this.view.turnToTarget.onDidChangePosition.sub(
+        this.onTurnToTargetMoved.bind(this)
+      );
+    }
+    private lastRobotMoveTime: DOMHighResTimeStamp = window.performance.now();
     onRobotMoved({
       pos,
       reason,
     }: Parameters<Parameters<GameObject["onDidChangePosition"]["sub"]>[0]>[0]) {
       if (
         reason.some((r) => r.toLowerCase().startsWith("sever")) ||
-        reason.includes("webview.AutonView.msgHandler.onIndexUpdate")
+        reason.includes("webview.AutonView.reCalculateRobotPos") ||
+        (window.performance.now() - this.lastRobotMoveTime <
+          EventListeners.maxTimeBetweenModMessages &&
+          !reason.includes("webview.DraggableGameObject.onMouseUp"))
       )
         return;
+      this.lastRobotMoveTime = window.performance.now();
+
+      if (!["move_to", "set_pose"].includes(this.view.curAct.type)) return;
+      let newPos: Partial<Position> = { x: pos.x, y: pos.y };
+      if ("set_pose" === this.view.curAct.type)
+        newPos.heading =
+          pos.heading * (this.view.curAct.params.radians ? Math.PI / 180 : 1);
+      this.view.auton.modify({
+        newProperties: { params: newPos },
+        index: this.view.index,
+        reason: reason.concat("webview.AutonView.eventListener.onRobotMoved"),
+      });
+    }
+    private lastTurnToTargetMoveTime: DOMHighResTimeStamp =
+      window.performance.now();
+    onTurnToTargetMoved({
+      pos,
+      reason,
+    }: Parameters<Parameters<GameObject["onDidChangePosition"]["sub"]>[0]>[0]) {
+      if (
+        reason.some((r) => r.toLowerCase().startsWith("sever")) ||
+        reason.includes("webview.AutonView.msgHandler.onIndexUpdate") ||
+        (window.performance.now() - this.lastTurnToTargetMoveTime <
+          EventListeners.maxTimeBetweenModMessages &&
+          !reason.includes("webview.DraggableGameObject.onMouseUp"))
+      )
+        return;
+
+      this.lastTurnToTargetMoveTime = window.performance.now();
+
+      if ("turn_to" !== this.view.curAct.type) return;
+      let newTarget: Partial<Position> = { x: pos.x, y: pos.y };
+      this.view.auton.modify({
+        newProperties: {
+          params: {
+            ...this.view.curAct.params,
+            ...newTarget,
+          },
+        },
+        index: this.view.index,
+        reason: reason.concat(
+          "webview.AutonView.eventListener.onTurnToTargetMoved"
+        ),
+      });
+      this.view.reCalculateRobotPos(
+        reason.concat("webview.AutonView.eventListener.onTurnToTargetMoved")
+      );
     }
     onAutonModified(
       mod: Parameters<Parameters<Auton["_onModifyEdit"]["sub"]>[0]>[0]
@@ -247,4 +344,4 @@ class AutonView {
 
 export const autonView = new AutonView();
 
-console.log("BOTTOM OF WEBVIEW");
+webviewLog("BOTTOM OF WEBVIEW");

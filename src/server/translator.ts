@@ -10,7 +10,7 @@ export namespace Translation {
     readonly offset: number;
     readonly endOffset: number;
     readonly text: string;
-    readonly groupIndices: { [k: string]: [number, number] };
+    readonly groupIndices: { [k: string]: [number, number] | undefined };
   };
   /** describes an action and its associated range in a text document */
   export type CppAction = Action &
@@ -492,7 +492,7 @@ export namespace Translation {
         // perform edit
         auton.makeEdit([...offsetAdjustMods, edit]);
       }
-      console.log("action:", auton.auton.at(-1));
+      // console.log("action:", auton.auton.at(-1));
       console.log({ change, auton: auton.auton, l: auton.auton.length });
       return edits;
     }
@@ -659,9 +659,10 @@ export namespace Translation {
           )
             // update existing action's params
             adjustEdits.push(
-              updateActionParams(
+              ...updateActionParams(
                 { ...modifiedAct, params: newAct.params } as ActionWithOffset,
                 doc,
+                reason.concat("server.translator.translateAutonEdit"),
                 workspaceEdit
               )
             );
@@ -703,8 +704,9 @@ export namespace Translation {
             )
           );
       }
-      auton.makeEdit(
-        adjustEdits.flatMap((adjust) =>
+
+      adjustEdits.forEach((adjust) =>
+        auton.makeEdit(
           AutonEdit.TypeGuards.isModify(adjust)
             ? adjust
             : OffsetAdjustment.fillCreateEdits(adjust, {
@@ -713,6 +715,7 @@ export namespace Translation {
               })
         )
       );
+
       return workspaceEdit;
     }
     export class OffsetAdjustment {
@@ -725,7 +728,8 @@ export namespace Translation {
       ) {}
       static changeActionLength(
         action: UUID,
-        change: number
+        change: number,
+        group: string
       ): OffsetAdjustment {
         let adjustment = new OffsetAdjustment(
           new this.Adjuster.SemiDynamic(
@@ -733,9 +737,34 @@ export namespace Translation {
             Object.fromEntries([
               [
                 action,
-                new this.Adjuster.Dynamic(({ offset, endOffset }) => {
-                  return { offset, endOffset: endOffset + change };
-                }),
+                new this.Adjuster.Dynamic(
+                  ({ offset, endOffset, groupIndices }) => {
+                    const changeOffset = groupIndices[group]![1];
+                    return {
+                      offset,
+                      endOffset: endOffset + change,
+                      groupIndices: Object.fromEntries(
+                        Object.entries(groupIndices)
+                          .filter(
+                            (entry): entry is [string, [number, number]] =>
+                              entry[1] !== undefined
+                          )
+                          .map(
+                            ([group, [start, end]]): [
+                              string,
+                              [number, number]
+                            ] => [
+                              group,
+                              [
+                                start + (start >= changeOffset ? change : 0),
+                                end + (end >= changeOffset ? change : 0),
+                              ],
+                            ]
+                          )
+                      ),
+                    };
+                  }
+                ),
               ],
             ])
           )
@@ -837,41 +866,49 @@ export namespace Translation {
           offset,
           endOffset,
           uuid,
-        }: {
-          offset: number;
-          endOffset: number;
-          uuid: UUID;
-        }): {
-          offset: number;
-          endOffset: number;
-        } {
+          groupIndices,
+        }: Omit<ActionWithOffset, "params" | "type" | "text">): Omit<
+          ActionWithOffset,
+          "params" | "type" | "text" | "uuid"
+        > {
           throw "Method Unimplemented";
         }
         static Constant = class Constant extends Adjuster {
           constructor(public readonly adjustment: number) {
             super();
           }
-          adjust({ offset, endOffset }: { offset: number; endOffset: number }) {
+          override adjust({
+            offset,
+            endOffset,
+            groupIndices,
+          }: Omit<ActionWithOffset, "params" | "type" | "text">) {
             return {
               offset: offset + this.adjustment,
               endOffset: endOffset + this.adjustment,
+              groupIndices: Object.fromEntries(
+                Object.entries(groupIndices)
+                  .filter(
+                    (entry): entry is [string, [number, number]] =>
+                      entry[1] !== undefined
+                  )
+                  .map(([group, [start, end]]): [string, [number, number]] => [
+                    group,
+                    [start + this.adjustment, end + this.adjustment],
+                  ])
+              ),
             };
           }
         };
         static Dynamic = class Dynamic extends Adjuster {
           constructor(
-            public readonly adjust: ({
+            public override readonly adjust: ({
               offset,
               endOffset,
               uuid,
-            }: {
-              offset: number;
-              endOffset: number;
-              uuid: UUID;
-            }) => {
-              offset: number;
-              endOffset: number;
-            }
+            }: Omit<ActionWithOffset, "params" | "type" | "text">) => Omit<
+              ActionWithOffset,
+              "params" | "type" | "text" | "uuid"
+            >
           ) {
             super();
           }
@@ -885,23 +922,17 @@ export namespace Translation {
           ) {
             super();
           }
-          adjust({
+          override adjust({
             offset,
             endOffset,
+            groupIndices,
             uuid,
-          }: {
-            uuid: UUID;
-            offset: number;
-            endOffset: number;
-          }) {
-            return (
-              uuid in this.adjusterMap
-                ? this.adjusterMap[uuid]
-                : this.defaultAdjuster
-            ).adjust({
+          }: Omit<ActionWithOffset, "params" | "type" | "text">) {
+            return (this.adjusterMap[uuid] ?? this.defaultAdjuster).adjust({
               offset,
               endOffset,
               uuid,
+              groupIndices,
             });
           }
         };
@@ -913,41 +944,76 @@ export namespace Translation {
     export function updateActionParams(
       action: ActionWithOffset,
       doc: vscode.TextDocument,
+      reason: string[],
       workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit()
-    ): OffsetAdjustment {
-      const currentText: string = doc.getText(
-        upgradeOffsetsToRange(action, doc)
-      );
-      return OffsetAdjustment.changeActionLength(
-        action.uuid,
-        Object.entries(action.groupIndices)
-          .filter(([group]) => !group.startsWith("_"))
+    ): (OffsetAdjustment | AutonEdit.Modify<ActionWithOffset>)[] {
+      const currActionText: string = action.text;
+      let updatedActionText: string = action.text;
+      let updatedEndOffset: number = action.endOffset;
+      return [
+        {
+          reason: reason.concat(
+            "server.translator.updateActionParams.adjustText"
+          ),
+          newProperties: { text: updatedActionText },
+          uuid: action.uuid,
+        },
+        ...Object.entries(action.groupIndices)
+          .filter(
+            (entry): entry is [string, [number, number]] =>
+              !entry[0].startsWith("_") && entry[1] !== undefined
+          )
           // remove type from group and get param name
-          .map(([group, indices]): [string, [number, number]] => [
+          .map(([group, indices]): [string, [number, number], string] => [
             group.split("_").slice(1).join(""),
             indices,
+            group.split("_")[0],
           ])
-          .reduce((offsetAdjustment, [group, [start, end]]) => {
+          // sort indices in ascending order
+          .sort(([_groupA, [a]], [_groupB, [b]]) => a - b)
+          .flatMap(([group, [start, end], groupType]) => {
             const newText: string | undefined = (
               action.params as {
                 [k: string]: boolean | number | string | undefined;
               }
             )[group]?.toString();
-            const currText = currentText.slice(
+            const currText = currActionText.slice(
               start - action.offset,
               end - action.offset
             );
+            let returnVal: (
+              | OffsetAdjustment
+              | AutonEdit.Modify<ActionWithOffset>
+            )[] = [];
             if (newText && newText !== currText) {
               workspaceEdit.replace(
                 doc.uri,
-                upgradeOffsetsToRange(action, doc),
+                upgradeOffsetsToRange({ offset: start, endOffset: end }, doc),
                 newText
               );
-              offsetAdjustment += newText.length - currText.length;
+              updatedActionText =
+                updatedActionText.slice(
+                  undefined,
+                  start - action.endOffset + updatedEndOffset
+                ) +
+                newText +
+                updatedActionText.slice(
+                  end - action.endOffset + updatedEndOffset
+                );
+              if (newText.length !== currText.length) {
+                updatedEndOffset += newText.length - currText.length;
+                returnVal.push(
+                  OffsetAdjustment.changeActionLength(
+                    action.uuid,
+                    newText.length - currText.length,
+                    groupType + "_" + group
+                  )
+                );
+              }
             }
-            return offsetAdjustment;
-          }, 0)
-      );
+            return returnVal;
+          }),
+      ];
     }
     /**
      * generates text for an action
