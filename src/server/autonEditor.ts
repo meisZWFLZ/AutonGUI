@@ -6,7 +6,6 @@ import { Translation } from "./translator";
 import { AutonTreeProvider, TreeItem } from "./autonTreeView";
 import { Action } from "../common/action";
 import { ISimpleEvent } from "strongly-typed-events";
-import { join } from "path";
 import { UUID } from "crypto";
 
 type CppAuton = Auton<Translation.CppAction>;
@@ -16,8 +15,8 @@ type DocumentInfo = {
   // modifiedText: boolean;
   /** edits made by AutonEditorProvider, used to indicate when an edit may be ignored by the edit listener */
   edits: { range: vscode.Range; newText: string }[];
-  // should add but lazy atm
-  // index: number;
+  /** must have at least 1 index */
+  indices: [number, ...number[]];
   content: string;
   unSubOnEdit: ReturnType<
     ISimpleEvent<AutonEdit.AutonEdit<Translation.ActionWithOffset>>["sub"]
@@ -119,13 +118,24 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     else
       this.documentInfo[uri] = {
         auton: auton,
+        indices: [0],
         edits: [],
         content: doc.getText(),
         unSubOnEdit: () => {},
       };
     return auton;
   }
-
+  /** gets auton associated with document */
+  protected getAutonIndices(doc: vscode.TextDocument): [number, ...number[]] {
+    return this.getDocInfo(doc).indices;
+  }
+  /** gets auton associated with document */
+  protected setAutonIndices(
+    doc: vscode.TextDocument,
+    indices: [number, ...number[]]
+  ): [number, ...number[]] {
+    return (this.getDocInfo(doc).indices = indices);
+  }
   // private _wEditQueue: vscode.WorkspaceEdit[] = [];
   // private _tryingToAddFirstEdit: boolean = false;
   // private async _tryToAddFirstEdit(attempts: number = 0) {
@@ -144,8 +154,6 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   //     this._tryToAddFirstEdit();
   //   } else this._tryToAddFirstEdit(attempts + 1);
   // }
-
-  
 
   private _queueForNewWEdit: (() => void)[] = [];
 
@@ -168,25 +176,42 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   private async _tryToAddEdit(
     wEdit: vscode.WorkspaceEdit,
     attempts: number = 0
-  ) {
+  ): Promise<void> {
+    if (wEdit.size <= 0) {
+      this._onFinishedAddingEdit();
+      throw "empty wEdit";
+    }
     if (attempts >= 10) {
       this._onFinishedAddingEdit();
+      wEdit
+        .entries()
+        .forEach(([uri, edits]) =>
+          this.getDocInfo(uri)?.edits.filter(
+            (docE) =>
+              !edits.some(
+                (wE) =>
+                  wE.newText === docE.newText && wE.range.isEqual(docE.range)
+              )
+          )
+        );
+      console.error("too many attempts to apply wEdit: ", wEdit);
       throw "too many attempts, giving up now";
     }
     const bool = await vscode.workspace.applyEdit(wEdit);
-    if (bool) this._onFinishedAddingEdit();
-    else this._tryToAddEdit(wEdit, attempts + 1);
+    if (bool) {
+      return this._onFinishedAddingEdit();
+    } else this._tryToAddEdit(wEdit, attempts + 1);
   }
   /**
    * applies {@link wEdit} and adds it to document info to indicate
    * the source of the edit to the onDidChangeTextDocument listener
    */
-  protected applyWorkspaceEdit(wEdit: vscode.WorkspaceEdit) {
-    if (wEdit.size <= 0) return;
-    wEdit
-      .entries()
-      .forEach(([uri, edits]) => this.getDocInfo(uri)?.edits.push(...edits));
-    this._tryToAddEdit(wEdit);
+  protected applyWorkspaceEdit(wEdit: vscode.WorkspaceEdit): Promise<void> {
+    if (wEdit.size > 0)
+      wEdit
+        .entries()
+        .forEach(([uri, edits]) => this.getDocInfo(uri)?.edits.push(...edits));
+    return this._tryToAddEdit(wEdit);
   }
   /**
    * Finds whether change is due to {@link AutonEditorProvider this} and if so removes corresponding edits from {@link documentInfo}
@@ -308,7 +333,10 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       document: vscode.TextDocument;
       msg: typeof Message.ToExtension.Modify.prototype;
     }): void {
-      this.editorProvider.getAuton(document).makeEdit(mod);
+      this.editorProvider.getAuton(document).makeEdit({
+        ...mod,
+        reason: mod.reason.concat("server.editor.msgListener.onEdit"),
+      });
       // interpret auton edit as a workspace edit and then apply the workspace edit
       // this.editorProvider.applyWorkspaceEdit(
       //   mod
@@ -489,7 +517,8 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     }) {
       // return if from this AutonEditor class or is a Move edit
       if (
-        edit.reason.some((r) => r.startsWith("server.editor")) ||
+        (edit.reason.at(-1) !== "server.editor.msgListener.onEdit" &&
+          edit.reason.some((r) => r.startsWith("server.editor"))) ||
         AutonEdit.TypeGuards.isReplace(edit)
       )
         return;
@@ -499,7 +528,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         document,
         edit,
       });
-      this.editorProvider.applyWorkspaceEdit(
+      const applyWEditPromise = this.editorProvider.applyWorkspaceEdit(
         Translation.AutonToCpp.translateAutonEdit(
           this.editorProvider.getAuton(
             document
@@ -507,18 +536,40 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           document,
           edit as AutonEdit.Result.AutonEdit<Translation.ActionWithOffset>,
           await this.editorProvider.getNewWorkspaceEdit(),
-          edit.reason.concat("server.editor.eventListener.onEdit")
+          edit.reason.concat("server.editor.eventListener.onAutonEdit")
         )
       );
-      if (edit.reason.every((r) => !r.startsWith("webview")))
+      if (edit.reason.at(-1) !== "server.editor.msgListener.onEdit")
         this.editorProvider.postEdits(webviewPanel, [
           {
             ...edit,
-            reason: edit.reason.concat("server.editor.eventListener.onEdit"),
+            reason: edit.reason.concat(
+              "server.editor.eventListener.onAutonEdit"
+            ),
           },
         ]);
-      else if (Array.isArray(this.currentGroup))
-        this.onCommandHighlightGroupIndicesAll({ webviewPanel, document });
+      else {
+        if (
+          edit.reason.at(-1) &&
+          AutonEdit.TypeGuards.isModify(edit) &&
+          "uuid" in edit
+        )
+          applyWEditPromise
+            .then(() =>
+              this.editorProvider.postMessage(
+                webviewPanel,
+                Message.ToWebview.ModifyResponse.respondWithSuccess(edit.uuid)
+              )
+            )
+            .catch(() =>
+              this.editorProvider.postMessage(
+                webviewPanel,
+                Message.ToWebview.ModifyResponse.respondWithFailure(edit.uuid)
+              )
+            );
+        if (Array.isArray(this.currentGroup))
+          this.onCommandHighlightGroupIndicesAll({ webviewPanel, document });
+      }
     }
     async onAutonViewDidChangeSelection({
       webviewPanel,
@@ -547,7 +598,6 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     }) {
       this.editorProvider.translateAndSetAuton(document, webviewPanel);
     }
-    autonIndices?: number[];
     currentGroup?: string[] | string;
     /**
      * Called by {@link onAutonViewDidChangeSelection} and {@link onDidChangeTextEditorSelection} to synchronize the index between editor, treeView, and webviewPanel
@@ -565,13 +615,20 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     }) {
       let newIndices = Array.isArray(newIndex) ? newIndex : [newIndex];
       if (newIndices.length <= 0) return;
-      if (!newIndices.every((e, i) => e == this.autonIndices?.[i]))
+      if (
+        !newIndices.every(
+          (e, i) => e == this.editorProvider.getAutonIndices(document)?.[i]
+        )
+      )
         this.editorProvider.postMessage(
           webviewPanel,
           new Message.ToWebview.IndexUpdate(newIndices[0])
         );
 
-      this.autonIndices = newIndices;
+      this.editorProvider.setAutonIndices(
+        document,
+        newIndices as [number, ...number[]]
+      );
 
       if (
         reason[0] !==
@@ -605,19 +662,24 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
               Array.isArray(this.currentGroup)
                 ? this.currentGroup
                 : [this.currentGroup]
-            ).map((group) =>
-              Translation.AutonToCpp.upgradeOffsetsToRange(
-                group &&
-                  group in act.groupIndices &&
-                  act.groupIndices[group] !== undefined
-                  ? {
-                      offset: act.groupIndices[group]![0],
-                      endOffset: act.groupIndices[group]![1],
-                    }
-                  : ((group = undefined), act),
-                document
+            )
+              .filter(
+                (group): group is string | undefined =>
+                  group === undefined ||
+                  (group in act.groupIndices &&
+                    act.groupIndices[group] !== undefined)
               )
-            );
+              .map((group) =>
+                Translation.AutonToCpp.upgradeOffsetsToRange(
+                  group
+                    ? {
+                        offset: act.groupIndices[group]![0],
+                        endOffset: act.groupIndices[group]![1],
+                      }
+                    : act,
+                  document
+                )
+              );
           })
           .map(({ end, start }) => new vscode.Selection(start, end));
       }
@@ -629,25 +691,28 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       webviewPanel: vscode.WebviewPanel;
       document: vscode.TextDocument;
     }) {
-      if (this.autonIndices) {
-        const actIndices = [
-          undefined,
-          ...Object.keys(
-            this.editorProvider.getAuton(document).auton[this.autonIndices[0]]
-              .groupIndices
-          ),
-        ];
-        this.currentGroup = actIndices.at(
-          actIndices.indexOf(
+      if (this.editorProvider.getAutonIndices(document)) {
+        const actGroupIndices =
+          this.editorProvider.getAuton(document).auton[
+            this.editorProvider.getAutonIndices(document)[0]
+          ].groupIndices;
+        const actGroups = [undefined, ...Object.keys(actGroupIndices)];
+        let index =
+          actGroups.indexOf(
             Array.isArray(this.currentGroup)
               ? this.currentGroup[0]
               : this.currentGroup
-          ) + 1
-        );
+          ) + 1;
+        while (
+          actGroups.at(index) !== undefined &&
+          actGroupIndices[actGroups.at(index)!] === undefined
+        )
+          index++;
+        this.currentGroup = actGroups.at(index);
         this.onDidChangeAutonIndex({
           webviewPanel,
           document,
-          newIndex: this.autonIndices,
+          newIndex: this.editorProvider.getAutonIndices(document),
           reason: ["onCommandHighlightGroupIndicesNext"],
         });
       }
@@ -659,26 +724,29 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       webviewPanel: vscode.WebviewPanel;
       document: vscode.TextDocument;
     }) {
-      if (this.autonIndices) {
-        const actIndices = [
-          undefined,
-          ...Object.keys(
-            this.editorProvider.getAuton(document).auton[this.autonIndices[0]]
-              .groupIndices
-          ),
-        ];
-        this.currentGroup = actIndices.at(
-          actIndices.indexOf(
+      if (this.editorProvider.getAutonIndices(document)) {
+        const actGroupIndices =
+          this.editorProvider.getAuton(document).auton[
+            this.editorProvider.getAutonIndices(document)[0]
+          ].groupIndices;
+        const actGroups = [undefined, ...Object.keys(actGroupIndices)];
+        let index =
+          actGroups.indexOf(
             Array.isArray(this.currentGroup)
               ? this.currentGroup[0]
               : this.currentGroup
-          ) - 1
-        );
+          ) - 1;
+        while (
+          actGroups.at(index) !== undefined &&
+          actGroupIndices[actGroups.at(index)!] === undefined
+        )
+          index--;
+        this.currentGroup = actGroups.at(index);
         this.onDidChangeAutonIndex({
           webviewPanel,
           document,
-          newIndex: this.autonIndices,
-          reason: ["onCommandHighlightGroupIndicesNext"],
+          newIndex: this.editorProvider.getAutonIndices(document),
+          reason: ["onCommandHighlightGroupIndicesPrevious"],
         });
       }
     }
@@ -689,16 +757,19 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       webviewPanel: vscode.WebviewPanel;
       document: vscode.TextDocument;
     }) {
-      if (this.autonIndices) {
-        this.currentGroup = Object.keys(
-          this.editorProvider.getAuton(document).auton[this.autonIndices[0]]
-            .groupIndices
+      if (this.editorProvider.getAutonIndices(document)) {
+        const groupIndices =
+          this.editorProvider.getAuton(document).auton[
+            this.editorProvider.getAutonIndices(document)[0]
+          ].groupIndices;
+        this.currentGroup = Object.keys(groupIndices).filter(
+          (group) => groupIndices[group] !== undefined
         );
         this.onDidChangeAutonIndex({
           webviewPanel,
           document,
-          newIndex: this.autonIndices,
-          reason: ["onCommandHighlightGroupIndicesNext"],
+          newIndex: this.editorProvider.getAutonIndices(document),
+          reason: ["onCommandHighlightGroupIndicesAll"],
         });
       }
     }
@@ -800,7 +871,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   			</html>`;
   }
 
-  private readonly _callbacks = new Map<number, (response: any) => void>();
+  private readonly _callbacks = new Map<UUID, (response: any) => void>();
 
   private postMessageWithResponse<R = unknown>(
     panel: vscode.WebviewPanel,

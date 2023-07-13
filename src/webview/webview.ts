@@ -8,6 +8,7 @@ import {
 } from "../common/coordinates.js";
 import { GameObject } from "./gameObject.js";
 import { FieldContainer } from "./fieldContainer.js";
+import { UUID } from "crypto";
 
 function webviewLog(...params: Parameters<typeof console.log>) {
   console.log("wv: ", ...params);
@@ -126,7 +127,36 @@ class AutonView {
         break;
     }
   }
-
+  private _uuidToQueuedMod: {
+    [k: UUID]: AutonEdit.Modify<Action> | undefined;
+  } = {};
+  /** uuids of mods to be performed */
+  private _uuidQueue: UUID[] = [];
+  _onAutonModified(mod: AutonEdit.Result.Modify<Action> & { uuid: UUID }) {
+    let modSent: boolean = false;
+    if (this._uuidQueue.length == 0) {
+      this.msgHandler.sendModify(mod);
+      modSent = true;
+    }
+    if (!this._uuidQueue.includes(mod.uuid)) this._uuidQueue.push(mod.uuid);
+    if (!modSent) this._uuidToQueuedMod[mod.uuid] = mod;
+  }
+  private _modifyEditResponse({
+    uuidOfModAct,
+  }: typeof Message.ToWebview.ModifyResponse.prototype) {
+    this._uuidQueue.shift();
+    if (this._uuidToQueuedMod[uuidOfModAct]) this._uuidQueue.push(uuidOfModAct);
+    while (this._uuidQueue.length > 0) {
+      const mod = this._uuidToQueuedMod[this._uuidQueue[0]];
+      if (mod == undefined) {
+        this._uuidQueue.shift();
+        continue;
+      }
+      this.auton.modify(mod);
+      this._uuidToQueuedMod[this._uuidQueue[0]] == undefined;
+      break;
+    }
+  }
   html = new (class HtmlElements {
     // public readonly index: HTMLElement;
     public readonly fieldBackground: SVGImageElement;
@@ -188,6 +218,8 @@ class AutonView {
           reason: [],
         });
       else if (Message.ToWebview.AutonUpdate.test(msg)) this.onAutonUpdate(msg);
+      else if (Message.ToWebview.ModifyResponse.test(msg))
+        this.view._modifyEditResponse(msg);
     }
     onAutonUpdate({
       newAuton,
@@ -245,12 +277,8 @@ class AutonView {
     private sendMessage(msg: typeof Message.ToExtension.prototype) {
       vscode.postMessage(msg);
     }
-    public sendModify(
-      mod: Omit<AutonEdit.Result.Modify<Action>, "index" | "uuid">
-    ) {
-      this.sendMessage(
-        new Message.ToExtension.Modify([{ ...mod, index: this.view.index }])
-      );
+    public sendModify(mod: AutonEdit.Result.Modify<Action>) {
+      this.sendMessage(new Message.ToExtension.Modify({ ...mod }));
     }
     public sendIndexUpdate(newIndex: number) {
       this.sendMessage(new Message.ToExtension.IndexUpdate(newIndex));
@@ -261,7 +289,7 @@ class AutonView {
   })(this);
 
   eventListeners = new (class EventListeners {
-    private static maxTimeBetweenModMessages = 250;
+    private static maxTimeBetweenModMessages = 10;
 
     constructor(protected view: AutonView) {
       view.auton.onModifyEdit.sub(this.onAutonModified.bind(this));
@@ -294,7 +322,7 @@ class AutonView {
           pos.heading * (this.view.curAct.params.radians ? Math.PI / 180 : 1);
       this.view.auton.modify({
         newProperties: { params: newPos },
-        index: this.view.index,
+        uuid: this.view.curAct.uuid,
         reason: reason.concat("webview.AutonView.eventListener.onRobotMoved"),
       });
     }
@@ -324,7 +352,7 @@ class AutonView {
             ...newTarget,
           },
         },
-        index: this.view.index,
+        uuid: this.view.curAct.uuid,
         reason: reason.concat(
           "webview.AutonView.eventListener.onTurnToTargetMoved"
         ),
@@ -337,7 +365,8 @@ class AutonView {
       mod: Parameters<Parameters<Auton["_onModifyEdit"]["sub"]>[0]>[0]
     ) {
       if (mod.reason.some((r) => r.toLowerCase().startsWith("server"))) return;
-      this.view.msgHandler.sendModify(mod);
+      if ("uuid" in mod) this.view._onAutonModified(mod);
+      else this.view.msgHandler.sendModify(mod);
     }
   })(this);
 }

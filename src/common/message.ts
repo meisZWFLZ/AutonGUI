@@ -5,6 +5,8 @@ import {
 } from "vscode";
 import Auton, { AutonData, AutonEdit } from "./auton";
 import { Action } from "./action";
+import { v4 as uuidV4 } from "uuid";
+import { UUID } from "crypto";
 // import { ListAction } from "../webview/eventList.js";
 // import { Node } from "./node.js";
 
@@ -15,78 +17,102 @@ export enum MSG_TARGET {
 /**
  * type of message sent to webview
  */
-export enum MSG_WEBVIEW_TYPE {
+export enum MSG_TO_WEBVIEW_TYPE {
   EDIT,
   UPDATE_AUTON,
   UPDATE_AUTON_INDEX,
+  MODIFY_RESPONSE,
   // INITIALIZE,
   // GET_FILE,
 }
 /**
  * type of message sent to extension
  */
-export enum MSG_EXTENSION_TYPE {
+export enum MSG_TO_EXTENSION_TYPE {
   MODIFY,
   UPDATE_AUTON_INDEX,
   READY,
   // GET_FILE_RESPONSE,
 }
 export default class Message {
-  private static lastId: number = 0;
   constructor(
     public readonly target: MSG_TARGET,
-    public readonly id: number = Message.lastId++
+    public readonly id: UUID = uuidV4() as UUID
   ) {}
   static ToWebview = class ToWebview extends Message {
     public static test(msg: Message): msg is ToWebview {
       return msg.target === MSG_TARGET.WEBVIEW;
     }
     public override readonly target: MSG_TARGET.WEBVIEW = MSG_TARGET.WEBVIEW;
-    constructor(public readonly type: MSG_WEBVIEW_TYPE, id?: number) {
+    constructor(public readonly type: MSG_TO_WEBVIEW_TYPE, id?: UUID) {
       super(MSG_TARGET.WEBVIEW, id);
     }
 
     static Edit = class Edit extends ToWebview {
       public static test(msg: Message): msg is Edit {
-        return ToWebview.test(msg) && msg.type === MSG_WEBVIEW_TYPE.EDIT;
+        return ToWebview.test(msg) && msg.type === MSG_TO_WEBVIEW_TYPE.EDIT;
       }
-      public override readonly type: MSG_WEBVIEW_TYPE.EDIT =
-        MSG_WEBVIEW_TYPE.EDIT;
+      public override readonly type: MSG_TO_WEBVIEW_TYPE.EDIT =
+        MSG_TO_WEBVIEW_TYPE.EDIT;
       constructor(
         public readonly edit: AutonEdit.AutonEdit[],
         public readonly newIndex?: number,
-        id?: number
+        id?: UUID
       ) {
-        super(MSG_WEBVIEW_TYPE.EDIT, id);
+        super(MSG_TO_WEBVIEW_TYPE.EDIT, id);
       }
     };
     static IndexUpdate = class IndexUpdate extends ToWebview {
       public static test(msg: Message): msg is IndexUpdate {
         return (
           ToWebview.test(msg) &&
-          msg.type === MSG_WEBVIEW_TYPE.UPDATE_AUTON_INDEX
+          msg.type === MSG_TO_WEBVIEW_TYPE.UPDATE_AUTON_INDEX
         );
       }
-      public override readonly type: MSG_WEBVIEW_TYPE.UPDATE_AUTON_INDEX =
-        MSG_WEBVIEW_TYPE.UPDATE_AUTON_INDEX;
-      constructor(public readonly newIndex: number, id?: number) {
-        super(MSG_WEBVIEW_TYPE.UPDATE_AUTON_INDEX, id);
+      public override readonly type: MSG_TO_WEBVIEW_TYPE.UPDATE_AUTON_INDEX =
+        MSG_TO_WEBVIEW_TYPE.UPDATE_AUTON_INDEX;
+      constructor(public readonly newIndex: number, id?: UUID) {
+        super(MSG_TO_WEBVIEW_TYPE.UPDATE_AUTON_INDEX, id);
       }
     };
     static AutonUpdate = class AutonUpdate extends ToWebview {
       public static test(msg: Message): msg is AutonUpdate {
         return (
-          ToWebview.test(msg) && msg.type === MSG_WEBVIEW_TYPE.UPDATE_AUTON
+          ToWebview.test(msg) && msg.type === MSG_TO_WEBVIEW_TYPE.UPDATE_AUTON
         );
       }
-      public override readonly type: MSG_WEBVIEW_TYPE.UPDATE_AUTON =
-        MSG_WEBVIEW_TYPE.UPDATE_AUTON;
+      public override readonly type: MSG_TO_WEBVIEW_TYPE.UPDATE_AUTON =
+        MSG_TO_WEBVIEW_TYPE.UPDATE_AUTON;
       constructor(
         public readonly newAuton: AutonData,
         public readonly newIndex: number,
-        id?: number
+        id?: UUID
       ) {
-        super(MSG_WEBVIEW_TYPE.UPDATE_AUTON, id);
+        super(MSG_TO_WEBVIEW_TYPE.UPDATE_AUTON, id);
+      }
+    };
+    static ModifyResponse = class ModifyResponse extends ToWebview {
+      public static test(msg: Message): msg is ModifyResponse {
+        return (
+          ToWebview.test(msg) &&
+          msg.type === MSG_TO_WEBVIEW_TYPE.MODIFY_RESPONSE
+        );
+      }
+      public override readonly type: MSG_TO_WEBVIEW_TYPE.MODIFY_RESPONSE =
+        MSG_TO_WEBVIEW_TYPE.MODIFY_RESPONSE;
+      constructor(
+        public readonly state: "success" | "failure",
+        /** UUID of the action modified by the {@link Message.ToExtension.Modify.prototype.mod mod} {@link AutonEdit} of the corresponding {@link Message.ToExtension.Modify Modify message */
+        public readonly uuidOfModAct: UUID,
+        id?: UUID
+      ) {
+        super(MSG_TO_WEBVIEW_TYPE.MODIFY_RESPONSE, id);
+      }
+      static respondWithFailure(uuidOfModAct: UUID): ModifyResponse {
+        return new ModifyResponse("failure", uuidOfModAct);
+      }
+      static respondWithSuccess(uuidOfModAct: UUID): ModifyResponse {
+        return new ModifyResponse("success", uuidOfModAct);
       }
     };
     // static Initialize = class Initialize extends ToWebview {
@@ -158,33 +184,35 @@ export default class Message {
     public override readonly target: MSG_TARGET.EXTENSION =
       MSG_TARGET.EXTENSION;
     static Stroke: any;
-    constructor(public readonly type: MSG_EXTENSION_TYPE, id?: number) {
+    constructor(public readonly type: MSG_TO_EXTENSION_TYPE, id?: UUID) {
       super(MSG_TARGET.EXTENSION, id);
     }
     static Modify = class Modify extends ToExtension {
       public static test(msg: Message): msg is Modify {
-        return ToExtension.test(msg) && msg.type === MSG_EXTENSION_TYPE.MODIFY;
+        return (
+          ToExtension.test(msg) && msg.type === MSG_TO_EXTENSION_TYPE.MODIFY
+        );
       }
-      public override readonly type: MSG_EXTENSION_TYPE.MODIFY =
-        MSG_EXTENSION_TYPE.MODIFY;
+      public override readonly type: MSG_TO_EXTENSION_TYPE.MODIFY =
+        MSG_TO_EXTENSION_TYPE.MODIFY;
       constructor(
-        public readonly mod: AutonEdit.Result.Modify<Action>[],
-        id?: number
+        public readonly mod: AutonEdit.Result.Modify<Action>,
+        id?: UUID
       ) {
-        super(MSG_EXTENSION_TYPE.MODIFY, id);
+        super(MSG_TO_EXTENSION_TYPE.MODIFY, id);
       }
     };
     static IndexUpdate = class IndexUpdate extends ToExtension {
       public static test(msg: Message): msg is IndexUpdate {
         return (
           ToExtension.test(msg) &&
-          msg.type === MSG_EXTENSION_TYPE.UPDATE_AUTON_INDEX
+          msg.type === MSG_TO_EXTENSION_TYPE.UPDATE_AUTON_INDEX
         );
       }
-      public override readonly type: MSG_EXTENSION_TYPE.UPDATE_AUTON_INDEX =
-        MSG_EXTENSION_TYPE.UPDATE_AUTON_INDEX;
-      constructor(public readonly newIndex: number, id?: number) {
-        super(MSG_EXTENSION_TYPE.UPDATE_AUTON_INDEX, id);
+      public override readonly type: MSG_TO_EXTENSION_TYPE.UPDATE_AUTON_INDEX =
+        MSG_TO_EXTENSION_TYPE.UPDATE_AUTON_INDEX;
+      constructor(public readonly newIndex: number, id?: UUID) {
+        super(MSG_TO_EXTENSION_TYPE.UPDATE_AUTON_INDEX, id);
       }
     };
     // static GetFileResponse = class GetFileResponse extends ToExtension {
@@ -205,12 +233,14 @@ export default class Message {
     // };
     static Ready = class Ready extends ToExtension {
       public static test(msg: Message): msg is Ready {
-        return ToExtension.test(msg) && msg.type === MSG_EXTENSION_TYPE.READY;
+        return (
+          ToExtension.test(msg) && msg.type === MSG_TO_EXTENSION_TYPE.READY
+        );
       }
-      public override readonly type: MSG_EXTENSION_TYPE.READY =
-        MSG_EXTENSION_TYPE.READY;
-      constructor(id?: number) {
-        super(MSG_EXTENSION_TYPE.READY, id);
+      public override readonly type: MSG_TO_EXTENSION_TYPE.READY =
+        MSG_TO_EXTENSION_TYPE.READY;
+      constructor(id?: UUID) {
+        super(MSG_TO_EXTENSION_TYPE.READY, id);
       }
     };
   };

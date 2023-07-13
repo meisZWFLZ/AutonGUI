@@ -940,6 +940,8 @@ export namespace Translation {
     }
     /**
      * adds a replace {@link vscode.TextEdit TextEdit } to workspaceEdit that updates the params
+     *
+     * @warn cannot add new params
      */
     export function updateActionParams(
       action: ActionWithOffset,
@@ -1006,7 +1008,7 @@ export namespace Translation {
                   OffsetAdjustment.changeActionLength(
                     action.uuid,
                     newText.length - currText.length,
-                    groupType + "_" + group
+                     groupType + "_" + group
                   )
                 );
               }

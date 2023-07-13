@@ -92,6 +92,7 @@ export class GameObject {
       restrictedPos.x === this.pos.x &&
       restrictedPos.y === this.pos.y &&
       restrictedPos.heading === this.pos.heading
+      && !reason.includes("webview.DraggableGameObject.onMouseUp")
     )
       return;
     this._pos = { ...this.pos, ...restrictedPos };
