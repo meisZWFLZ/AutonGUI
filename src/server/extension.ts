@@ -4,6 +4,31 @@ import { AutonEditorProvider } from "./autonEditor";
 import { AutonTreeProvider } from "./autonTreeView";
 
 export function activate(context: vscode.ExtensionContext) {
+  // test command
+  context.subscriptions.push(
+    vscode.commands.registerCommand("vrc-auton.symbol-test", () => {
+      vscode.commands
+        .executeCommand<vscode.DocumentSymbol[]>(
+          "vscode.executeDocumentSymbolProvider",
+          vscode.window.activeTextEditor?.document.uri
+        )
+        .then(async (symbols: vscode.DocumentSymbol[]) => {
+          console.log(symbols);
+          symbols
+            .filter((s) => s.kind === vscode.SymbolKind.Function)
+            .forEach((s) =>
+              vscode.commands
+                .executeCommand(
+                  "clangd.ast.retrieve",
+                  s.range,
+                  vscode.window.activeTextEditor?.document.uri
+                )
+                .then((ast) => console.log(`"${s.name}": `, ast))
+            );
+        });
+    })
+  );
+
   // create Auton List View
   let autonView: AutonTreeProvider = new AutonTreeProvider(context);
 

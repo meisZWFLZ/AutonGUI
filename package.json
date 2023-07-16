@@ -99,6 +99,11 @@
         "title": "Hide Auton Builder",
         "category": "Auton Builder",
         "when": "editorFocus && editorLangId == cpp && resourceFilename =~ /^.*\\.cpp$/ && resourcePath in vrc-auton.builder.visible"
+      },
+      {
+        "command": "vrc-auton.symbol-test",
+        "title": "Symbol Tester",
+        "when": "editorTextFocus"
       }
     ],
     "menus": {
@@ -128,6 +133,12 @@
         "key": "ctrl+shift+r",
         "mac": "cmd+shift+r",
         "when": "view.vrc-auton.list-view.visible"
+      },
+      {
+        "command": "vrc-auton.symbol-test",
+        "key": "alt+shift+q",
+        "mac": "alt+shift+q",
+        "when": "editorTextFocus"
       },
       {
         "command": "vrc-auton.list-view.highlightGroupIndicesNext",
