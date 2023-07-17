@@ -9,20 +9,19 @@ import {
   Wait,
   BaseAction,
 } from "../common/action";
-import Auton, { AutonEdit } from "../common/auton";
-import { isNativeError } from "util/types";
 import { SignalDispatcher } from "strongly-typed-events";
 import { UUID } from "crypto";
+import { ActionWithRanges, AutonList } from "./astTranslator";
 
-export class AutonTreeProvider
-  implements
-    vscode.TreeDataProvider<TreeItem>,
-    vscode.TreeDragAndDropController<TreeItem>
-{
+export type TreeItemID = string | `act:${UUID}`;
+
+export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
+  /* ,
+    vscode.TreeDragAndDropController<TreeItemID> */
   private _onDidChangeTreeData: vscode.EventEmitter<
-    TreeItem | undefined | void
-  > = new vscode.EventEmitter<TreeItem | undefined | void>();
-  public onDidChangeTreeData: vscode.Event<TreeItem | undefined | void> =
+    TreeItemID | undefined | void
+  > = new vscode.EventEmitter<TreeItemID | undefined | void>();
+  public onDidChangeTreeData: vscode.Event<TreeItemID | undefined | void> =
     this._onDidChangeTreeData.event;
 
   private _onRefreshCommand = new SignalDispatcher();
@@ -34,20 +33,20 @@ export class AutonTreeProvider
     this._onDidChangeTreeData.fire();
   }
 
-  private _view: vscode.TreeView<TreeItem>;
-  private data: TreeItem[] = [];
+  private _view: vscode.TreeView<TreeItemID>;
+  private data: AutonList = {};
 
   public get view() {
     return this._view;
   }
 
-  public setAuton<T extends Action = Action>(auton: Auton<T>): Auton<T> {
-    this.auton.onModified.unsub(this.setData);
-    this.auton = auton as unknown as Auton;
-    this.setData();
-    this.auton.onModified.sub(this.setData.bind(this));
-    return auton;
-  }
+  // public setAuton<T extends Action = Action>(auton: Auton<T>): Auton<T> {
+  //   // this.auton.onModified.unsub(this.setData);
+  //   this.auton = auton as unknown as Auton;
+  //   // this.setData();
+  //   this.auton.onModified.sub(this.setData.bind(this));
+  //   return auton;
+  // }
 
   // public editAuton<T extends AutonEdit.AutonEdit | AutonEdit.AutonEdit[]>(
   //   _edit: T
@@ -57,23 +56,20 @@ export class AutonTreeProvider
   //   return _edit;
   // }
 
-  /** sets this.data using this.auton */
-  private setData() {
-    this.data = TreeItem.fromAuton(this.auton, this._context);
-    // console.log("SET DATA!", this.auton, this.data);
-    this.refresh();
-  }
+  // /** sets this.data using this.auton */
+  // private setData() {
+  //   this.data = TreeItem.fromAuton(this.auton, this._context);
+  //   // console.log("SET DATA!", this.auton, this.data);
+  //   this.refresh();
+  // }
   constructor(
-    protected _context: vscode.ExtensionContext,
-    protected auton: Auton = Auton.newAutonAtOrigin()
+    protected _context: vscode.ExtensionContext /*     protected auton: Auton = Auton.newAutonAtOrigin() */
   ) {
-    this.setData();
-
     this._view = vscode.window.createTreeView("vrc-auton.list-view", {
       treeDataProvider: this,
       showCollapseAll: false,
       canSelectMany: true,
-      dragAndDropController: this,
+      // dragAndDropController: this,
     });
     _context.subscriptions.push(this._view);
     _context.subscriptions.push(
@@ -84,21 +80,53 @@ export class AutonTreeProvider
       this._onRefreshCommand.dispatch()
     );
   }
-
-  getTreeItem(element: TreeItem): TreeItem {
-    return element;
-  }
-  getTreeItemFromId(id: UUID): TreeItem | undefined {
-    return this.data.find((e) => e.id === id);
-  }
-
-  getChildren(
-    element?: TreeItem | undefined
-  ): vscode.ProviderResult<TreeItem[]> {
-    if (!element) {
-      return this.data;
+  getTreeItem(element: TreeItemID): vscode.TreeItem {
+    if (element.startsWith("act:")) {
+      const uuid = element.slice("act:".length);
+      const actionDesc = Object.values(this.data)
+        .flatMap((func) =>
+          func.auton.auton.map((act) => {
+            return { func, act };
+          })
+        )
+        .find(({ act }) => act.uuid == uuid);
+      if (!actionDesc) throw "uuid does not correspond to any action";
+      return TreeItem.fromAction(
+        actionDesc.act,
+        actionDesc.func.uri,
+        this._context
+      );
+    } else {
+      const item = new vscode.TreeItem(
+        element,
+        vscode.TreeItemCollapsibleState.Expanded
+      );
+      // go to
+      item.command = {
+        title: "Jump to",
+        command: "vscode.open",
+        arguments: [
+          this.data[element].uri,
+          {
+            preserveFocus: true,
+            selection: this.data[element].range,
+          },
+        ],
+      };
+      item.contextValue = "auton";
+      return item;
     }
-    return element.children;
+  }
+  getChildren(
+    element?: TreeItemID | undefined
+  ): vscode.ProviderResult<TreeItemID[]> {
+    if (!element) {
+      return Object.keys(this.data);
+    }
+    if (!element.startsWith("act:") && element in this.data) {
+      return this.data[element].auton.auton.map((act) => act.uuid);
+    }
+    return [];
   }
 
   // tree drag and drop provider
@@ -107,73 +135,79 @@ export class AutonTreeProvider
   dropMimeTypes = [AutonTreeProvider.DROP_MIME_TYPE];
   dragMimeTypes = ["text/uri-list"];
 
-  handleDrag?(
-    source: readonly TreeItem[],
-    dataTransfer: vscode.DataTransfer,
-    token: vscode.CancellationToken
-  ): void | Thenable<void> {
-    dataTransfer.set(
-      AutonTreeProvider.DROP_MIME_TYPE,
-      new vscode.DataTransferItem(source.map((e) => e.id))
-    );
-    // throw new Error("Method not implemented.");
-  }
-  handleDrop?(
-    target: TreeItem | undefined,
-    dataTransfer: vscode.DataTransfer,
-    token: vscode.CancellationToken
-  ): void | Thenable<void> {
-    const transferItem = dataTransfer.get(AutonTreeProvider.DROP_MIME_TYPE);
-    if (!transferItem) {
-      return;
+  // handleDrag?(
+  //   source: readonly TreeItem[],
+  //   dataTransfer: vscode.DataTransfer,
+  //   token: vscode.CancellationToken
+  // ): void | Thenable<void> {
+  //   dataTransfer.set(
+  //     AutonTreeProvider.DROP_MIME_TYPE,
+  //     new vscode.DataTransferItem(source.map((e) => e.id))
+  //   );
+  //   // throw new Error("Method not implemented.");
+  // }
+  // handleDrop?(
+  //   target: TreeItem | undefined,
+  //   dataTransfer: vscode.DataTransfer,
+  //   token: vscode.CancellationToken
+  // ): void | Thenable<void> {
+  //   const transferItem = dataTransfer.get(AutonTreeProvider.DROP_MIME_TYPE);
+  //   if (!transferItem) {
+  //     return;
+  //   }
+  //   const treeItems: TreeItem["id"][] = transferItem.value;
+
+  //   console.log({ target, dataTransfer, treeItem: treeItems });
+  //   if (
+  //     target?.id !== treeItems[0] &&
+  //     (target === undefined ||
+  //       this.data[this.data.indexOf(target) + 1]?.id !== treeItems[0])
+  //   )
+  //     try {
+  //       // index of element that treeItems should go under
+  //       let targetIndex = target
+  //         ? this.auton.auton.findIndex((e) => target.id == e.uuid)
+  //         : this.data.length;
+  //       let firstTreeItemIndex = this.auton.auton.findIndex(
+  //         (e) => treeItems[0] == e.uuid
+  //       );
+  //       // index directly after last treeItem's index
+  //       let indexAfterTreeItems =
+  //         this.auton.auton.findIndex((e) => treeItems.at(-1) == e.uuid) + 1;
+  //       this.auton.makeEdit({
+  //         insertionIndex: targetIndex,
+  //         sourceStart: firstTreeItemIndex,
+  //         sourceEnd: indexAfterTreeItems,
+  //         reason: ["server.view.handleDrop"],
+  //       });
+  //     } catch (error) {
+  //       console.error("AutonView.handleDrop: ", error);
+  //       if (
+  //         isNativeError(error) ||
+  //         typeof error !== "string" ||
+  //         !/^auton\.\w+\(\):/.test(error)
+  //       )
+  //         throw error;
+  //     }
+  //   // let roots = this._getLocalRoots(treeItems);
+  //   // // Remove nodes that are already target's parent nodes
+  //   // roots = roots.filter(r => !this._isChild(this._getTreeElement(r.key), target));
+  //   // if (roots.length > 0) {
+  //   // 	// Reload parents of the moving elements
+  //   // 	const parents = roots.map(r => this.getParent(r));
+  //   // 	roots.forEach(r => this._reparentNode(r, target));
+  //   // 	this._onDidChangeTreeData.fire([...parents, target]);
+  //   // }
+  // }
+
+  getParent(id: TreeItemID): TreeItemID | undefined {
+    if (id.startsWith("act:")) {
+      const uuid = id.slice("act:".length);
+      return Object.entries(this.data).find(([func, { auton }]) =>
+        auton.auton.some((act) => act.uuid == uuid)
+      )?.[0];
     }
-    const treeItems: TreeItem["id"][] = transferItem.value;
-
-    console.log({ target, dataTransfer, treeItem: treeItems });
-    if (
-      target?.id !== treeItems[0] &&
-      (target === undefined ||
-        this.data[this.data.indexOf(target) + 1]?.id !== treeItems[0])
-    )
-      try {
-        // index of element that treeItems should go under
-        let targetIndex = target
-          ? this.auton.auton.findIndex((e) => target.id == e.uuid)
-          : this.data.length;
-        let firstTreeItemIndex = this.auton.auton.findIndex(
-          (e) => treeItems[0] == e.uuid
-        );
-        // index directly after last treeItem's index
-        let indexAfterTreeItems =
-          this.auton.auton.findIndex((e) => treeItems.at(-1) == e.uuid) + 1;
-        this.auton.makeEdit({
-          insertionIndex: targetIndex,
-          sourceStart: firstTreeItemIndex,
-          sourceEnd: indexAfterTreeItems,
-          reason: ["server.view.handleDrop"],
-        });
-      } catch (error) {
-        console.error("AutonView.handleDrop: ", error);
-        if (
-          isNativeError(error) ||
-          typeof error !== "string" ||
-          !/^auton\.\w+\(\):/.test(error)
-        )
-          throw error;
-      }
-    // let roots = this._getLocalRoots(treeItems);
-    // // Remove nodes that are already target's parent nodes
-    // roots = roots.filter(r => !this._isChild(this._getTreeElement(r.key), target));
-    // if (roots.length > 0) {
-    // 	// Reload parents of the moving elements
-    // 	const parents = roots.map(r => this.getParent(r));
-    // 	roots.forEach(r => this._reparentNode(r, target));
-    // 	this._onDidChangeTreeData.fire([...parents, target]);
-    // }
-  }
-
-  getParent({ id }: TreeItem): vscode.ProviderResult<TreeItem> {
-    return this.data.find(({ id: parentId }) => parentId == id);
+    return undefined;
   }
 }
 
@@ -268,55 +302,11 @@ export class TreeItem extends vscode.TreeItem implements TreeItemProperties {
   label: TreeItemProperties["label"];
   id: TreeItemProperties["id"];
 
-  public static fromAction<A extends Action["type"]>(
-    action: Extract<Action, { type: A }>,
+  public static fromAction<A extends ActionWithRanges["type"]>(
+    action: Extract<ActionWithRanges, { type: A }>,
+    uri: vscode.Uri,
     context: vscode.ExtensionContext
   ) {
-    // let iconPath: string | vscode.Uri | vscode.ThemeIcon = "";
-    // switch (action.type) {
-    //   case "expand":
-    //   case "roller":
-    //   case "intake":
-    //   case "stop_intake":
-    //   case "shoot":
-    //   case "piston_shoot":
-    //     iconPath = vscode.Uri.joinPath(
-    //       context.extensionUri,
-    //       "media",
-    //       "actionIcons",
-    //       `${action.type}.svg`
-    //     );
-    //     break;
-    //   case "follow":
-    //     iconPath = new ThemeIcon("git-branch");
-    //     break;
-    //   case "move_to":
-    //     iconPath = new ThemeIcon("move");
-    //     break;
-    //   case "turn_to":
-    //     iconPath = new ThemeIcon("debug-restart");
-    //     break;
-    //   case "wait":
-    //     iconPath = new ThemeIcon("clock");
-    //     break;
-    //   case "set_pose":
-    //     iconPath = new ThemeIcon("plus");
-    //     break;
-    //   default:
-    //     iconPath = action;
-    // }
-    // return new TreeItem({
-    //   label: action.type.replaceAll(
-    //     /(^|_)([a-z])/g,
-    //     (_idc, startOrUnderscore: string, letter: string): string => {
-    //       return (
-    //         (startOrUnderscore.length > 0 ? " " : "") + letter.toUpperCase()
-    //       );
-    //     }
-    //   ),
-    //   ...(iconPath ? { iconPath } : {}),
-    //   id: action.uuid,
-    // });
     const rawTreeItemProps = actionToTreeItem[action.type as A];
 
     let treeItemProps: Partial<TreeItemProperties> = { id: action.uuid };
@@ -338,15 +328,26 @@ export class TreeItem extends vscode.TreeItem implements TreeItemProperties {
             : value;
       }
     }
+    treeItemProps.command = {
+      title: "Jump to",
+      command: "vscode.open",
+      arguments: [
+        uri,
+        {
+          preserveFocus: true,
+          selection: action.range,
+        },
+      ],
+    };
     return new TreeItem(treeItemProps as TreeItemProperties);
   }
-  /** produces an array of tree items representing the auton */
-  public static fromAuton(
-    auton: Auton,
-    context: vscode.ExtensionContext
-  ): TreeItem[] {
-    return auton.auton.map((action) => TreeItem.fromAction(action, context));
-  }
+  // /** produces an array of tree items representing the auton */
+  // public static fromAuton(
+  //   auton: Auton,
+  //   context: vscode.ExtensionContext
+  // ): TreeItem[] {
+  //   return auton.auton.map((action) => TreeItem.fromAction(action, context));
+  // }
 
   constructor({
     label,

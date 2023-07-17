@@ -27,10 +27,17 @@ interface CallExprASTNode extends ASTNode {
   role: "expression";
   children: Array<ASTNode>;
 }
-type ActionWithRanges = Action & {
+export type ActionWithRanges = Action & {
   range: vscode.Range;
   paramRanges: {
     [p in keyof Action["params"]]: vscode.Range;
+  };
+};
+export type AutonList<A extends ActionWithRanges = ActionWithRanges> = {
+  [k: string]: {
+    uri: vscode.Uri;
+    range: vscode.Range;
+    auton: Auton<A>;
   };
 };
 
@@ -261,14 +268,35 @@ export class ASTTranslator {
 
   public static async getAutons(
     doc: vscode.TextDocument
-  ): Promise<{ [k: string]: Auton<ActionWithRanges> }> {
+  ): Promise<AutonList<ActionWithRanges>> {
     return Object.fromEntries(
-      (await this.getFunctions(doc.uri)).map(
-        (funcNode): [string, Auton<ActionWithRanges>] => [
-          funcNode.detail!,
-          this.functionToAuton(funcNode, doc),
-        ]
-      )
+      (await this.getFunctions(doc.uri))
+        .filter(
+          (
+            funcNode
+          ): funcNode is FunctionDecASTNode &
+            Required<Pick<FunctionDecASTNode, "detail" | "range">> =>
+            funcNode.detail !== undefined && funcNode.range !== undefined
+        )
+        .map(
+          (
+            funcNode
+          ): [
+            string,
+            {
+              auton: Auton<ActionWithRanges>;
+              uri: vscode.Uri;
+              range: vscode.Range;
+            }
+          ] => [
+            funcNode.detail,
+            {
+              range: funcNode.range,
+              uri: doc.uri,
+              auton: this.functionToAuton(funcNode, doc),
+            },
+          ]
+        )
     );
   }
 }
@@ -285,13 +313,4 @@ type ActionDescriptorType = {
       ? "boolean"
       : "int" | "float";
   };
-};
-type tempTypeEntry<Key extends keyof Obj, Obj> = Key extends any
-  ? [Key, NonNullable<Obj[Key]>]
-  : never;
-type tempTypeY = {
-  [k in Action["type"]]: tempTypeEntry<
-    keyof ActionTypeToParamsMap[k],
-    ActionTypeToParamsMap[k]
-  >;
 };
