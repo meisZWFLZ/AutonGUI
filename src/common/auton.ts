@@ -50,7 +50,7 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     });
   }
 
-  public get auton(): Readonly<AutonData<Readonly<A>>> {
+  public get auton(): AutonData<Readonly<A>> {
     return this._auton;
   }
   // public set auton(auton: AutonData<A>) {

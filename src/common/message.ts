@@ -183,7 +183,6 @@ export default class Message {
     }
     public override readonly target: MSG_TARGET.EXTENSION =
       MSG_TARGET.EXTENSION;
-    static Stroke: any;
     constructor(public readonly type: MSG_TO_EXTENSION_TYPE, id?: UUID) {
       super(MSG_TARGET.EXTENSION, id);
     }
