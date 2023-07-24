@@ -5,7 +5,7 @@ import Message, { MSG_TARGET } from "../common/message";
 import { UUID } from "crypto";
 /**
  * Serves as an api to manage webview
- * 
+ *
  * Does not interact with filesystem in any way
  */
 class WebviewManager {
@@ -29,13 +29,17 @@ class WebviewManager {
       .ViewColumn.Beside
   ) {
     if (this.panel) throw "this.panel already defined";
-    this.panel = vscode.window.createWebviewPanel(
+    this._context.subscriptions.push(this.panel = vscode.window.createWebviewPanel(
       "vrc-auton.builder",
       this.createWebviewTitle(),
       viewColumn,
       WebviewManager.webviewOptions
-    );
+    ));
     this.panel.webview.html = this.getWebviewHtml();
+    this.onDidReceiveWebviewMessage?.(
+      this.MsgListener.onMessage,
+      this._context.subscriptions
+    );
   }
 
   show(viewColumn?: vscode.ViewColumn, preserveFocus?: boolean) {

@@ -50,14 +50,9 @@
       "title": "VRC Auton Builder",
       "properties": {
         "vrc-auton.directory": {
-          "type": "array",
-          "description": "Specifies where autons will be stored.\nElements should be an absolute path or a relative path (relative to the workspace).",
-          "default": [
-            "./autons"
-          ],
-          "items": {
-            "type": "string"
-          }
+          "type": "string",
+          "markdownDescription": "[Glob pattern](https://code.visualstudio.com/docs/editor/glob-patterns) that specifies where the extension should look for auton functions.",
+          "default": "**/auton/**/*.cpp"
         }
       }
     },

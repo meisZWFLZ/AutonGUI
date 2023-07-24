@@ -11,9 +11,12 @@ import {
 } from "../common/action";
 import { SignalDispatcher } from "strongly-typed-events";
 import { UUID } from "crypto";
-import { ActionWithRanges, AutonList } from "./astTranslator";
+import { ActionWithRanges } from "./astTranslator";
+import { AutonList, AutonListData } from "./autonList";
 
-export type TreeItemID = string | `act:${UUID}`;
+export type TreeItemID =
+  | { type: "func"; uri: string; funcName: string }
+  | { type: "act"; uuid: UUID };
 
 export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
   /* ,
@@ -34,7 +37,6 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
   }
 
   private _view: vscode.TreeView<TreeItemID>;
-  private data: AutonList = {};
 
   public get view() {
     return this._view;
@@ -63,7 +65,8 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
   //   this.refresh();
   // }
   constructor(
-    protected _context: vscode.ExtensionContext /*     protected auton: Auton = Auton.newAutonAtOrigin() */
+    protected _context: vscode.ExtensionContext /*     protected auton: Auton = Auton.newAutonAtOrigin() */,
+    private data: AutonList
   ) {
     this._view = vscode.window.createTreeView("vrc-auton.list-view", {
       treeDataProvider: this,
@@ -81,50 +84,70 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
     );
   }
   getTreeItem(element: TreeItemID): vscode.TreeItem {
-    if (element.startsWith("act:")) {
-      const uuid = element.slice("act:".length);
-      const actionDesc = Object.values(this.data)
-        .flatMap((func) =>
-          func.auton.auton.map((act) => {
-            return { func, act };
-          })
-        )
-        .find(({ act }) => act.uuid == uuid);
-      if (!actionDesc) throw "uuid does not correspond to any action";
-      return TreeItem.fromAction(
-        actionDesc.act,
-        actionDesc.func.uri,
-        this._context
-      );
+    if (element.type === "act") {
+      try {
+        const actionDesc = this.data.findUUID(element.uuid);
+        if (!actionDesc) throw "uuid does not correspond to any action";
+        return TreeItem.fromAction(
+          actionDesc.act,
+          vscode.Uri.parse(actionDesc.uri),
+          this._context
+        );
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
     } else {
       const item = new vscode.TreeItem(
-        element,
+        element.funcName,
         vscode.TreeItemCollapsibleState.Expanded
       );
       // go to
-      item.command = {
-        title: "Jump to",
-        command: "vscode.open",
-        arguments: [
-          this.data[element].uri,
-          {
-            preserveFocus: true,
-            selection: this.data[element].range,
-          },
-        ],
-      };
+      try {
+        item.command = {
+          title: "Jump to",
+          command: "vscode.open",
+          arguments: [
+            element.uri,
+            {
+              preserveFocus: true,
+              selection: this.data.getFuncAutons(element.funcName)[0].range,
+            },
+          ],
+        };
+      } catch (e) {
+        console.trace();
+        console.error(e);
+        throw e;
+      }
+      item.tooltip = `${element.uri}: ${element.funcName}`;
       item.contextValue = "auton";
       return item;
     }
   }
+
+  private static actToId({ uuid }: Action): TreeItemID {
+    return { type: "act", uuid };
+  }
+  private static funcToId({
+    uri,
+    funcName,
+  }: Pick<AutonListData, "funcName" | "uri">): TreeItemID {
+    return { type: "func", uri, funcName };
+  }
+
   getChildren(
     element?: TreeItemID | undefined
   ): vscode.ProviderResult<TreeItemID[]> {
     if (!element) {
-      return Object.keys(this.data);
+      return this.data.getData().map(AutonTreeProvider.funcToId);
     }
-    if (!element.startsWith("act:") && element in this.data) {
-      return this.data[element].auton.auton.map((act) => act.uuid);
+    if (element.type === "func") {
+      return this.data
+        .getFuncAutons(element.funcName, element.uri)
+        .flatMap(({ auton: { auton } }) =>
+          auton.map(AutonTreeProvider.actToId)
+        );
     }
     return [];
   }
@@ -201,13 +224,16 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
   // }
 
   getParent(id: TreeItemID): TreeItemID | undefined {
-    if (id.startsWith("act:")) {
-      const uuid = id.slice("act:".length);
-      return Object.entries(this.data).find(([func, { auton }]) =>
-        auton.auton.some((act) => act.uuid == uuid)
-      )?.[0];
+    if (id.type == "act") {
+      try {
+        const actData = this.data.findUUID(id.uuid);
+        if (!actData) throw "action with uuid not found";
+        return AutonTreeProvider.funcToId(actData);
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
     }
-    return undefined;
   }
 }
 
@@ -308,38 +334,42 @@ export class TreeItem extends vscode.TreeItem implements TreeItemProperties {
     context: vscode.ExtensionContext
   ) {
     const rawTreeItemProps = actionToTreeItem[action.type as A];
-
-    let treeItemProps: Partial<TreeItemProperties> = { id: action.uuid };
-    for (const property of Object.keys(rawTreeItemProps) as Array<
-      keyof typeof rawTreeItemProps
-    >) {
-      const value = rawTreeItemProps[property];
-      if (value !== undefined) {
-        treeItemProps[property as keyof Omit<TreeItemProperties, "id">] =
-          typeof value == "function"
-            ? value(
-                action,
-                ["iconPath", "resourceUri"].includes(
-                  property as keyof Omit<TreeItemProperties, "id">
+    try {
+      let treeItemProps: Partial<TreeItemProperties> = { id: action.uuid };
+      for (const property of Object.keys(rawTreeItemProps) as Array<
+        keyof typeof rawTreeItemProps
+      >) {
+        const value = rawTreeItemProps[property];
+        if (value !== undefined) {
+          treeItemProps[property as keyof Omit<TreeItemProperties, "id">] =
+            typeof value == "function"
+              ? value(
+                  action,
+                  ["iconPath", "resourceUri"].includes(
+                    property as keyof Omit<TreeItemProperties, "id">
+                  )
+                    ? context.extensionUri
+                    : undefined
                 )
-                  ? context.extensionUri
-                  : undefined
-              )
-            : value;
+              : value;
+        }
       }
+        treeItemProps.command = {
+          title: "Jump to",
+          command: "vscode.open",
+          arguments: [
+            uri,
+            {
+              preserveFocus: true,
+              selection: action.range,
+            },
+          ],
+        };
+      return new TreeItem(treeItemProps as TreeItemProperties);
+    } catch (e) {
+      console.error(e);
+      throw e;
     }
-    treeItemProps.command = {
-      title: "Jump to",
-      command: "vscode.open",
-      arguments: [
-        uri,
-        {
-          preserveFocus: true,
-          selection: action.range,
-        },
-      ],
-    };
-    return new TreeItem(treeItemProps as TreeItemProperties);
   }
   // /** produces an array of tree items representing the auton */
   // public static fromAuton(

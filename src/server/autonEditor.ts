@@ -1,3 +1,5 @@
+/// @ts-nocheck
+
 import * as vscode from "vscode";
 import { getNonce } from "./util";
 import Message from "../common/message";

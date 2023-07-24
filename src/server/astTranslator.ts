@@ -4,6 +4,7 @@ import { Action } from "../common/action";
 import Auton from "../common/auton";
 import { randomUUID } from "crypto";
 import { AutonData } from "../common/auton";
+import { AutonListData } from "./autonList";
 
 interface RawASTNode {
   role: string; // e.g. expression
@@ -33,13 +34,6 @@ export type ActionWithRanges = Action & {
     [p in keyof Action["params"]]: vscode.Range;
   };
 };
-export type AutonList<A extends ActionWithRanges = ActionWithRanges> = {
-  [k: string]: {
-    uri: vscode.Uri;
-    range: vscode.Range;
-    auton: Auton<A>;
-  };
-};
 
 export class ASTTranslator {
   /** converts {@link RawASTNode.range range} to {@link vscode.Range}  */
@@ -49,7 +43,7 @@ export class ASTTranslator {
     return (
       rawNode && {
         ...rawNode,
-        children: rawNode.children?.map(this.upgradeRawNode),
+        children: rawNode.children?.map(this.upgradeRawNode.bind(this)),
         range:
           rawNode.range &&
           new vscode.Range(
@@ -82,7 +76,7 @@ export class ASTTranslator {
         (
           await vscode.commands.executeCommand<vscode.DocumentSymbol[]>(
             "vscode.executeDocumentSymbolProvider",
-            vscode.window.activeTextEditor?.document.uri
+            uri
           )
         )
           .filter((s) => s.kind === vscode.SymbolKind.Function)
@@ -268,36 +262,22 @@ export class ASTTranslator {
 
   public static async getAutons(
     doc: vscode.TextDocument
-  ): Promise<AutonList<ActionWithRanges>> {
-    return Object.fromEntries(
-      (await this.getFunctions(doc.uri))
-        .filter(
-          (
-            funcNode
-          ): funcNode is FunctionDecASTNode &
-            Required<Pick<FunctionDecASTNode, "detail" | "range">> =>
-            funcNode.detail !== undefined && funcNode.range !== undefined
-        )
-        .map(
-          (
-            funcNode
-          ): [
-            string,
-            {
-              auton: Auton<ActionWithRanges>;
-              uri: vscode.Uri;
-              range: vscode.Range;
-            }
-          ] => [
-            funcNode.detail,
-            {
-              range: funcNode.range,
-              uri: doc.uri,
-              auton: this.functionToAuton(funcNode, doc),
-            },
-          ]
-        )
-    );
+  ): Promise<Omit<AutonListData<ActionWithRanges>, "uri">[]> {
+    return (await this.getFunctions(doc.uri))
+      .filter(
+        (
+          funcNode
+        ): funcNode is FunctionDecASTNode &
+          Required<Pick<FunctionDecASTNode, "detail" | "range">> =>
+          funcNode.detail !== undefined && funcNode.range !== undefined
+      )
+      .map((funcNode): Omit<AutonListData<ActionWithRanges>, "uri"> => {
+        return {
+          range: funcNode.range,
+          funcName: funcNode.detail,
+          auton: this.functionToAuton(funcNode, doc),
+        };
+      });
   }
 }
 type ActionTypeToParamsMap = {
