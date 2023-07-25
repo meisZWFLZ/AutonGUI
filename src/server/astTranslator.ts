@@ -34,6 +34,12 @@ export type ActionWithRanges = Action & {
     [p in keyof Action["params"]]: vscode.Range;
   };
 };
+export type ClangdAPI = {
+  retrieveAst: (
+    range: vscode.Range,
+    uri: vscode.Uri
+  ) => Promise<RawASTNode | null>;
+};
 
 export class ASTTranslator {
   /** converts {@link RawASTNode.range range} to {@link vscode.Range}  */
@@ -59,13 +65,11 @@ export class ASTTranslator {
     range: vscode.Range,
     uri: vscode.Uri
   ): Promise<ASTNode | null> {
-    return this.upgradeRawNode(
-      await vscode.commands.executeCommand<RawASTNode | null>(
-        "clangd.ast.retrieve",
-        range,
-        uri
-      )
+    let clangd = vscode.extensions.getExtension<ClangdAPI>(
+      "llvm-vs-code-extensions.vscode-clangd"
     );
+    if (clangd == undefined) throw "clangd not yet activated";
+    return this.upgradeRawNode(await clangd.exports.retrieveAst(range, uri));
   }
   /** gets all function declaration nodes that are part of the autons namespace */
   private static async getFunctions(

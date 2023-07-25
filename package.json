@@ -155,6 +155,7 @@
       }
     ]
   },
+  "extensionDependencies": ["llvm-vs-code-extensions.vscode-clangd"],	
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "npm run pack-webview && npm run compile-server",
