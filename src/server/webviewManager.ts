@@ -8,7 +8,7 @@ import { UUID } from "crypto";
  *
  * Does not interact with filesystem in any way
  */
-class WebviewManager {
+export class WebviewManager {
   private panel?: vscode.WebviewPanel;
   private auton?: Auton;
   private autonIndex: number | UUID = -1;
@@ -29,15 +29,17 @@ class WebviewManager {
       .ViewColumn.Beside
   ) {
     if (this.panel) throw "this.panel already defined";
-    this._context.subscriptions.push(this.panel = vscode.window.createWebviewPanel(
-      "vrc-auton.builder",
-      this.createWebviewTitle(),
-      viewColumn,
-      WebviewManager.webviewOptions
-    ));
+    this._context.subscriptions.push(
+      (this.panel = vscode.window.createWebviewPanel(
+        "vrc-auton.builder",
+        this.createWebviewTitle(),
+        viewColumn,
+        WebviewManager.webviewOptions
+      ))
+    );
     this.panel.webview.html = this.getWebviewHtml();
     this.onDidReceiveWebviewMessage?.(
-      this.MsgListener.onMessage,
+      this.MsgListener.onMessage.bind(this.MsgListener),
       this._context.subscriptions
     );
   }
@@ -135,7 +137,7 @@ class WebviewManager {
   }
 
   setAuton(functionName: string, auton: Auton, index?: number | UUID) {
-    if (index) this.autonIndex = index;
+    if (index !== undefined) this.autonIndex = index;
     if (this.autonIndex == -1) throw "this.autonIndex == -1";
     this.functionName = functionName;
     this.auton = auton;
@@ -174,11 +176,16 @@ class WebviewManager {
   private readonly MsgListener = new (class MsgListener {
     constructor(private manager: WebviewManager) {}
     onMessage(msg: Message) {
-      if (!Message.ToExtension.test(msg)) return;
-      if (Message.ToExtension.Ready.test(msg)) this.onReady(msg);
-      else if (Message.ToExtension.IndexUpdate.test(msg))
-        this.onIndexUpdate(msg);
-      else if (Message.ToExtension.Modify.test(msg)) this.onModify(msg);
+      try {
+        if (!Message.ToExtension.test(msg)) return;
+        if (Message.ToExtension.Ready.test(msg)) this.onReady(msg);
+        else if (Message.ToExtension.IndexUpdate.test(msg))
+          this.onIndexUpdate(msg);
+        else if (Message.ToExtension.Modify.test(msg)) this.onModify(msg);
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
     }
     onModify({ mod }: typeof Message.ToExtension.Modify.prototype) {
       this.manager.auton?.makeEdit(mod);
@@ -217,7 +224,7 @@ class WebviewManager {
   public get onDidReceiveWebviewMessage(): vscode.Event<Message> | undefined {
     return this.panel?.webview.onDidReceiveMessage;
   }
-  public get onAutonEdit() {
-    return this.auton?.onEdit;
+  public get onAutonModifyEdit() {
+    return this.auton?.onModifyEdit;
   }
 }

@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { Translation } from "./translator";
-import { Action } from "../common/action";
-import Auton from "../common/auton";
+import { Action, SetPose } from "../common/action";
+import Auton, { AutonEdit } from "../common/auton";
 import { randomUUID } from "crypto";
 import { AutonData } from "../common/auton";
 import { AutonListData } from "./autonList";
@@ -28,12 +28,16 @@ interface CallExprASTNode extends ASTNode {
   role: "expression";
   children: Array<ASTNode>;
 }
-export type ActionWithRanges = Action & {
-  range: vscode.Range;
-  paramRanges: {
-    [p in keyof Action["params"]]: vscode.Range;
-  };
-};
+export type ActionWithRanges<T extends Action["type"] = Action["type"]> =
+  T extends string
+    ? Extract<Action, { type: T }> & {
+        range: vscode.Range;
+        paramRanges: Record<
+          keyof Extract<Action, { type: T }>["params"],
+          vscode.Range
+        >;
+      }
+    : never;
 export type ClangdAPI = {
   retrieveAst: (
     range: vscode.Range,
@@ -175,6 +179,223 @@ export class ASTTranslator {
     boolean: { kind: "CXXBoolLiteral", try: ["int", "float"] },
     string: { kind: "StringLiteral", try: [] },
   };
+  /**
+   * yields root and all of it's descendants, always yielding the leftmost un-yielded child of previously yielded nodes
+   */
+  static *traverseAST(root: ASTNode): Generator<ASTNode, void, void> {
+    yield root;
+    if (root.children)
+      for (const child of root.children) {
+        yield* this.traverseAST(child);
+      }
+  }
+  static readonly ParamInterpreter: ParameterInterpreter = {
+    string: function (
+      this: ParameterInterpreter,
+      root: ASTNode,
+      doc: vscode.TextDocument
+    ): string {
+      const foundNode = ASTTranslator.findNode(root, { kind: "StringLiteral" });
+      if (foundNode) return doc.getText(foundNode?.range);
+      throw "could not parse string";
+    },
+    boolean: function (
+      this: ParameterInterpreter,
+      root: ASTNode,
+      doc: vscode.TextDocument
+    ): boolean {
+      const generator = ASTTranslator.traverseAST(root);
+      for (const node of generator) {
+        if (node.kind === "CXXBoolLiteral") return !!node.detail?.match("true");
+        else if (node.kind === "UnaryOperator" && node.detail === "!") {
+          const next = generator.next().value;
+          if (next) return !this.boolean(next, doc);
+        } else if (node.kind === "ImplicitCast") {
+          const next = generator.next().value;
+          if (next)
+            switch (node.detail?.split("ToBoolean")[0]) {
+              case "Floating":
+                return new Boolean(this.float(next, doc)).valueOf();
+              case "Integral":
+                return new Boolean(this.int(next, doc)).valueOf();
+            }
+        } else if (node.kind === "BinaryOperator") {
+          const nodeA = node.children?.[0];
+          const nodeB = node.children?.[1];
+          if (nodeA && nodeB)
+            switch (node.detail) {
+              case "|":
+                return this.boolean(nodeA, doc) || this.boolean(nodeB, doc);
+              case "^":
+                return this.boolean(nodeA, doc) !== this.boolean(nodeB, doc);
+              case "&":
+                return this.boolean(nodeA, doc) && this.boolean(nodeB, doc);
+              case "!=":
+              case "==":
+              case "<":
+              case ">":
+              case "!=":
+              case "==":
+              case "<=":
+              case ">=":
+                throw `ParamInterpreter cannot parse '${node.detail}' operator`;
+              default:
+                throw `ParamInterpreter does not recognize '${node.detail}' operator`;
+            }
+        } else if (node.kind === "ConditionalOperator") {
+          const condition = node.children?.[0];
+          const expr1 = node.children?.[1];
+          const expr2 = node.children?.[2];
+          if (condition && expr1 && expr2)
+            return this.boolean(condition, doc)
+              ? this.boolean(expr1, doc)
+              : this.boolean(expr2, doc);
+        }
+      }
+      throw "could not parse boolean";
+    },
+    float: function (
+      this: ParameterInterpreter,
+      root: ASTNode,
+      doc: vscode.TextDocument
+    ): number {
+      const generator = ASTTranslator.traverseAST(root);
+      for (const node of generator) {
+        if (node.kind === "FloatingLiteral")
+          return new Number(node.detail?.replace(/[lfLF]/, "")).valueOf();
+        else if (node.kind === "UnaryOperator") {
+          const next = generator.next().value;
+          if (next)
+            switch (node.detail) {
+              case "+":
+                return +this.float(next, doc);
+              case "-":
+                return -this.float(next, doc);
+              default:
+                throw `ParamInterpreter does not recognize '${node.detail}' operator`;
+            }
+        } else if (node.kind === "ImplicitCast") {
+          // node.detail === "IntegralCast"?
+          if (!node.detail?.endsWith("ToFloating")) continue;
+          const next = generator.next().value;
+          if (next)
+            switch (node.detail?.split("ToFloating")[0]) {
+              case "Integral":
+                return this.int(next, doc);
+              case "Boolean":
+                return new Number(this.boolean(next, doc)).valueOf();
+              default:
+                throw `ParamInterpreter does not recognize '${node.detail}' Cast`;
+            }
+        } else if (node.kind === "BinaryOperator") {
+          const nodeA = node.children?.[0];
+          const nodeB = node.children?.[1];
+          if (nodeA && nodeB)
+            switch (node.detail) {
+              case "+":
+                return this.float(nodeA, doc) + this.float(nodeB, doc);
+              case "-":
+                return this.float(nodeA, doc) - this.float(nodeB, doc);
+              case "*":
+                return this.float(nodeA, doc) * this.float(nodeB, doc);
+              case "/":
+                return this.float(nodeA, doc) / this.float(nodeB, doc);
+              case ",":
+                return this.float(nodeB, doc);
+              default:
+                throw `ParamInterpreter does not recognize '${node.detail}' operator`;
+            }
+        } else if (node.kind === "ConditionalOperator") {
+          const condition = node.children?.[0];
+          const expr1 = node.children?.[1];
+          const expr2 = node.children?.[2];
+          if (condition && expr1 && expr2)
+            return this.boolean(condition, doc)
+              ? this.float(expr1, doc)
+              : this.float(expr2, doc);
+        }
+      }
+      throw "could not parse floating";
+    },
+    int: function (
+      this: ParameterInterpreter,
+      root: ASTNode,
+      doc: vscode.TextDocument
+    ): number {
+      const generator = ASTTranslator.traverseAST(root);
+      for (const node of generator) {
+        if (node.kind === "IntegerLiteral")
+          return new Number(node.detail?.replace(/[lL]/, "")).valueOf();
+        else if (node.kind === "UnaryOperator") {
+          const next = generator.next().value;
+          if (next)
+            switch (node.detail) {
+              case "~":
+                return ~this.int(next, doc);
+              case "+":
+                return +this.int(next, doc);
+              case "-":
+                return -this.int(next, doc);
+              default:
+                throw `ParamInterpreter does not recognize '${node.detail}' operator`;
+            }
+        } else if (node.kind === "ImplicitCast") {
+          // node.detail === "IntegralCast"?
+          if (!node.detail?.endsWith("ToIntegral")) continue;
+          const next = generator.next().value;
+          if (next)
+            switch (node.detail?.split("ToIntegral")[0]) {
+              case "Floating":
+                return Math.round(this.float(next, doc));
+              case "Boolean":
+                return new Number(this.boolean(next, doc)).valueOf();
+              default:
+                throw `ParamInterpreter does not recognize '${node.detail}' Cast`;
+            }
+        } else if (node.kind === "BinaryOperator") {
+          const nodeA = node.children?.[0];
+          const nodeB = node.children?.[1];
+          if (nodeA && nodeB)
+            switch (node.detail) {
+              case "+":
+                return this.int(nodeA, doc) + this.int(nodeB, doc);
+              case "-":
+                return this.int(nodeA, doc) - this.int(nodeB, doc);
+              case "*":
+                return this.int(nodeA, doc) * this.int(nodeB, doc);
+              case "/":
+                // rounds towards 0, not -Infinity
+                return (this.int(nodeA, doc) / this.int(nodeB, doc)) | 0;
+              case "%":
+                return this.int(nodeA, doc) % this.int(nodeB, doc);
+              case "<<":
+                return this.int(nodeA, doc) << +this.int(nodeB, doc);
+              case ">>":
+                return +this.int(nodeA, doc) >> +this.int(nodeB, doc);
+              case "&":
+                return this.int(nodeA, doc) & this.int(nodeB, doc);
+              case "|":
+                return this.int(nodeA, doc) | this.int(nodeB, doc);
+              case "^":
+                return this.int(nodeA, doc) ^ this.int(nodeB, doc);
+              case ",":
+                return this.int(nodeB, doc);
+              default:
+                throw `ParamInterpreter does not recognize '${node.detail}' operator`;
+            }
+        } else if (node.kind === "ConditionalOperator") {
+          const condition = node.children?.[0];
+          const expr1 = node.children?.[1];
+          const expr2 = node.children?.[2];
+          if (condition && expr1 && expr2)
+            return this.boolean(condition, doc)
+              ? this.int(expr1, doc)
+              : this.int(expr2, doc);
+        }
+      }
+      throw "could not parse integer";
+    },
+  };
   private static convertCallExprToAction(
     call: CallExprASTNode,
     doc: vscode.TextDocument
@@ -200,47 +421,23 @@ export class ASTTranslator {
     const actDesc = Object.entries(this.ActionDescriptor[snakeCaseCallName]);
 
     for (let i = 1; i < call.children.length; i++) {
-      let paramType = actDesc[i - 1][1];
-      let paramName = actDesc[i - 1][0];
-      let paramVal = null;
-
-      for (const [castType, kind] of [
-        paramType,
-        ...this.paramTypeToASTKind[actDesc[i - 1][1]].try,
-      ].map((t): [typeof t, string] => [t, this.paramTypeToASTKind[t].kind])) {
-        const foundNode = this.findNode(call.children[i], { kind });
-        if (!foundNode || !foundNode.range) continue;
-        paramRanges[paramName] = foundNode.range;
-
-        switch (castType) {
-          case "string":
-            paramVal = doc.getText(foundNode.range);
-            break;
-          case "boolean":
-            paramVal = Boolean(foundNode.detail);
-            break;
-          case "int":
-          case "float":
-            paramVal = Number(foundNode.detail);
-            break;
+      const paramNode = call.children[i];
+      const paramType = actDesc[i - 1][1];
+      const paramName = actDesc[i - 1][0];
+      if (paramNode.kind !== "CXXDefaultArg" && paramNode.range !== undefined)
+        try {
+          params[paramName] = this.ParamInterpreter[paramType](paramNode, doc);
+          paramRanges[paramName] = paramNode.range;
+        } catch (e) {
+          const err = `Failed to parse ${paramType} from property ${paramName} of Action ${snakeCaseCallName}: ${e}`;
+          vscode.window.showErrorMessage(err, "Show Me").then(() =>
+            vscode.commands.executeCommand("vscode.open", doc.uri, {
+              preserveFocus: true,
+              selection: paramNode.range,
+            })
+          );
+          console.error(err);
         }
-        if (paramVal) break;
-      }
-
-      if (!paramVal) continue;
-      switch (paramType) {
-        case "boolean":
-          paramVal = !!paramVal;
-          break;
-        case "int":
-          paramVal = Math.floor(Number(paramVal));
-          break;
-        case "float":
-          paramVal = Number(paramVal);
-          break;
-      }
-
-      params[paramName] = paramVal;
     }
 
     return {
@@ -283,18 +480,81 @@ export class ASTTranslator {
         };
       });
   }
+
+  static applyAutonModifyEdit<T extends Action["type"] = Action["type"]>(
+    mod: AutonEdit.Result.Modify<ActionWithRanges<T>>,
+    act: ActionWithRanges<T>,
+    uri: vscode.Uri,
+    wEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit()
+  ): vscode.WorkspaceEdit {
+    const newParams = mod.newProperties.params;
+    if (newParams === undefined) return wEdit;
+
+    for (const newParam in newParams) {
+      const newParamVal = newParams[newParam];
+      const newParamRange =
+        act.paramRanges[newParam as keyof typeof act.paramRanges];
+      if (newParamRange === undefined) continue;
+      switch (typeof newParamVal) {
+        case "string":
+          wEdit.replace(uri, newParamRange, newParamVal);
+          break;
+        case "boolean":
+          wEdit.replace(
+            uri,
+            newParamRange,
+            new Boolean(newParamVal).toString()
+          );
+          break;
+        case "number":
+          wEdit.replace(uri, newParamRange, new Number(newParamVal).toString());
+          break;
+      }
+    }
+    return wEdit;
+  }
 }
-type ActionTypeToParamsMap = {
-  [k in Action["type"]]: Extract<Action, { type: k }>["params"];
+type ParameterInterpreter = {
+  [k in NonNullable<ValuesOfObject<ValuesOfObject<ActionDescriptorType>>>]: (
+    this: ParameterInterpreter,
+    node: ASTNode,
+    doc: vscode.TextDocument
+  ) => ActionParameterStringToType<k>;
 };
+type ValuesOfObject<Obj extends {}> = Obj extends any ? Obj[keyof Obj] : never;
+type ActionWithType<A extends Action, T extends A["type"]> = Extract<
+  A,
+  { type: T }
+>;
+type ActionTypeToParamsMap = {
+  [k in Action["type"]]: ActionWithType<Action, k>["params"];
+};
+type ActionParameterTypeToString<
+  ParamType extends NonNullable<ValuesOfObject<Action["params"]>>
+> = ParamType extends string
+  ? "string"
+  : ParamType extends boolean
+  ? "boolean"
+  : ParamType extends number
+  ? "int" | "float"
+  : never;
+type ActionParameterStringToType<
+  ParamString extends ActionParameterTypeToString<
+    NonNullable<ValuesOfObject<Action["params"]>>
+  >
+> = ParamString extends "string"
+  ? string
+  : ParamString extends "boolean"
+  ? boolean
+  : ParamString extends "int" | "float"
+  ? number
+  : never;
+
 type ActionDescriptorType = {
   [k in Action["type"]]: {
-    [p in keyof ActionTypeToParamsMap[k]]-?: NonNullable<
-      ActionTypeToParamsMap[k][p]
-    > extends string
-      ? "string"
-      : NonNullable<ActionTypeToParamsMap[k][p]> extends boolean
-      ? "boolean"
-      : "int" | "float";
+    [p in keyof ActionTypeToParamsMap[k]]-?: ActionParameterTypeToString<
+      //@ts-ignore
+      NonNullable<ActionTypeToParamsMap[k][p]>
+    >;
   };
 };
