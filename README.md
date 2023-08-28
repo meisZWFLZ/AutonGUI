@@ -1,5 +1,7 @@
 # Auton Builder for Vex Robotics Competition
 A graphical editor for vrc autons.
+### _**Deprecated:**_ This documentation refers to an [older release](https://github.com/meisZWFLZ/AutonGUI/releases/tag/v0.0.2-pre-alpha).
+
 ![Auton Editor Example](documentation/example.png)
 ## What it does
 This extension allows programmers to easily create and modify autons in the form of a .vauton (json) file. This file can then be downloaded onto an Micro SD card and interpreted by the program on the robot.
@@ -32,6 +34,7 @@ This extension allows programmers to easily create and modify autons in the form
     - N - Create new node after this node
     - Delete - remove current note
   > _**Note:**_ Keybindings cannot be modified
+
 ## Installation 
 1. Go To the desired release ([0.0.2-pre-alpha](https://github.com/meisZWFLZ/AutonGUI/releases/tag/v0.0.2-pre-alpha)) and download the .vsix file
 2. Install using any of the below methods  
@@ -39,6 +42,7 @@ This extension allows programmers to easily create and modify autons in the form
    - In VS Code run the `Extensions: Install from VSIX...` command.
    - In a terminal, run the following command  
       `code --install-extension /path/to/file/vrc-auton-0.0.1.vsix`
+    
 ## Auton Data Structure
 The .vauton file that this extension creates is just a .json file. This json is an array of auton nodes each containing an position value and an array of actions
 - Auton Node
