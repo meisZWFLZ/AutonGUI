@@ -16,7 +16,7 @@ function webviewLog(...params: Parameters<typeof console.log>) {
 
 webviewLog("TOP OF WEBVIEW");
 
-// @ts-ignore
+// @ts-expect-error vscode is silly, and doesn't define this
 const vscode = acquireVsCodeApi();
 
 class AutonView {
@@ -26,52 +26,57 @@ class AutonView {
 
   constructor(
     protected auton: Auton = Auton.newAutonAtOrigin(),
-    protected index: number = 0
+    protected index: number = 0,
   ) {
     this.fieldContainer = new FieldContainer(this.html.field);
     this.robot = new GameObject.Draggable(
       this.html.robot,
       this.fieldContainer,
       auton.getStartPos(),
-      { draggable: true }
+      { draggable: true },
     );
     this.turnToTarget = new GameObject.Draggable(
       this.html.turnTo,
       this.fieldContainer,
       auton.getStartPos(),
-      { draggable: false, visibility: "hidden" }
+      { draggable: false, visibility: "hidden" },
     );
     // end of constructor
     this.eventListeners.onAutonViewConstructed();
     this.msgHandler.sendReady();
   }
+
   get curAct() {
     return this.auton.auton[this.index];
   }
+
   /**
    * Gets robot position at index
    * @param index auton index
    * @returns Robot position at {@link index auton index}
    */
   getRobotPos(index: number = this.index): Position {
-    let pos: Partial<Position> = {};
+    const pos: Partial<Position> = {};
     let turnTo: (Coordinate & { readonly reversed?: boolean }) | undefined;
     for (const { type, params } of this.auton.auton
       .slice(0, index + 1)
       .reverse()) {
       switch (type) {
         case "set_pose":
-          if (!turnTo)
+          if (turnTo == null) {
             pos.heading ??=
               params.heading * (params.radians ? 180 / Math.PI : 1);
+          }
+        // falls through
         case "move_to":
-          if (turnTo)
+          if (turnTo != null) {
             pos.heading =
               Math.atan2(
                 (turnTo.x - params.x) * (turnTo.reversed ? -1 : 1),
-                (turnTo.y - params.y) * (turnTo.reversed ? 1 : -1)
+                (turnTo.y - params.y) * (turnTo.reversed ? 1 : -1),
               ) *
               (180 / Math.PI);
+          }
           if (CoordinateUtilities.isCoordinate(pos)) continue;
           pos.x = params.x;
           pos.y = params.y;
@@ -87,6 +92,7 @@ class AutonView {
     }
     return { ...{ x: 0, y: 0, heading: 0 }, ...pos };
   }
+
   /**
    * gets robot pos at current auton index and moves robot to it
    */
@@ -94,13 +100,14 @@ class AutonView {
     try {
       this.robot.animateMove(
         this.getRobotPos(),
-        reason.concat("webview.AutonView.reCalculateRobotPos")
+        reason.concat("webview.AutonView.reCalculateRobotPos"),
       );
     } catch (e) {
       console.error(e);
     }
     webviewLog("robot: ", this.getRobotPos());
   }
+
   setIndex(newIndex: number, reason: string[]) {
     this.index = newIndex;
     this.reCalculateRobotPos(reason.concat("webview.AutonView.setIndex"));
@@ -114,7 +121,7 @@ class AutonView {
       case "turn_to":
         this.turnToTarget.setPosition(
           this.curAct.params,
-          reason.concat("webview.AutonView.setIndex")
+          reason.concat("webview.AutonView.setIndex"),
         );
         this.turnToTarget.show();
         this.turnToTarget.draggable = true;
@@ -127,13 +134,15 @@ class AutonView {
         break;
     }
   }
+
   private _uuidToQueuedMod: {
     [k: UUID]: AutonEdit.Modify<Action> | undefined;
   } = {};
+
   /** uuids of mods to be performed */
-  private _uuidQueue: UUID[] = [];
+  private readonly _uuidQueue: UUID[] = [];
   _onAutonModified(mod: AutonEdit.Result.Modify<Action> & { uuid: UUID }) {
-    let modSent: boolean = false;
+    let modSent = false;
     if (this._uuidQueue.length == 0) {
       this.msgHandler.sendModify(mod);
       modSent = true;
@@ -141,11 +150,13 @@ class AutonView {
     if (!this._uuidQueue.includes(mod.uuid)) this._uuidQueue.push(mod.uuid);
     if (!modSent) this._uuidToQueuedMod[mod.uuid] = mod;
   }
+
   private _modifyEditResponse({
     uuidOfModAct,
   }: typeof Message.ToWebview.ModifyResponse.prototype) {
     this._uuidQueue.shift();
-    if (this._uuidToQueuedMod[uuidOfModAct]) this._uuidQueue.push(uuidOfModAct);
+    if (this._uuidToQueuedMod[uuidOfModAct] != null)
+      this._uuidQueue.push(uuidOfModAct);
     while (this._uuidQueue.length > 0) {
       const mod = this._uuidToQueuedMod[this._uuidQueue[0]];
       if (mod == undefined) {
@@ -157,6 +168,7 @@ class AutonView {
       break;
     }
   }
+
   html = new (class HtmlElements {
     // public readonly index: HTMLElement;
     public readonly fieldBackground: SVGImageElement;
@@ -179,7 +191,7 @@ class AutonView {
       this.turnTo = this.getElement(".turn-to", "turnTo target");
       this.fieldBackground = this.getElement(
         ".field-background",
-        "field background"
+        "field background",
       );
 
       // const els = this;
@@ -195,9 +207,10 @@ class AutonView {
       //   },
       // };
     }
+
     private getElement<
       D extends ParentNode,
-      T extends NonNullable<ReturnType<D["querySelector"]>>
+      T extends NonNullable<ReturnType<D["querySelector"]>>,
     >(query: string, readableName: string, parent?: D) {
       const el: T | null = (parent ?? document).querySelector(query);
       if (el == null) throw "no " + readableName.trim() + " element";
@@ -209,18 +222,22 @@ class AutonView {
     constructor(protected view: AutonView) {
       window.addEventListener("message", this.listener.bind(this));
     }
+
     listener({ data: msg }: { data: Message }) {
       webviewLog(msg);
       if (Message.ToWebview.Edit.test(msg)) this.onEdit(msg);
-      else if (Message.ToWebview.IndexUpdate.test(msg))
+      else if (Message.ToWebview.IndexUpdate.test(msg)) {
         this.onIndexUpdate({
           ...msg,
           reason: [],
         });
-      else if (Message.ToWebview.AutonUpdate.test(msg)) this.onAutonUpdate(msg);
-      else if (Message.ToWebview.ModifyResponse.test(msg))
+      } else if (Message.ToWebview.AutonUpdate.test(msg))
+        this.onAutonUpdate(msg);
+      else if (Message.ToWebview.ModifyResponse.test(msg)) {
         this.view._modifyEditResponse(msg);
+      }
     }
+
     onAutonUpdate({
       newAuton,
       newIndex,
@@ -240,6 +257,7 @@ class AutonView {
         newIndex,
       });
     }
+
     onEdit({
       edit,
       newIndex,
@@ -253,13 +271,14 @@ class AutonView {
             ...e,
             reason: e.reason.concat("webview.AutonView.msgHandler.onEdit"),
           };
-        })
+        }),
       );
       this.onIndexUpdate({
         newIndex: newIndex ?? this.view.index,
         reason: edit[0].reason.concat("webview.AutonView.msgHandler.onEdit"),
       });
     }
+
     onIndexUpdate({
       newIndex,
       reason,
@@ -270,36 +289,41 @@ class AutonView {
       webviewLog("new index: " + newIndex);
       this.view.setIndex(
         newIndex,
-        reason.concat("webview.AutonView.msgHandler.onIndexUpdate")
+        reason.concat("webview.AutonView.msgHandler.onIndexUpdate"),
       );
     }
 
     private sendMessage(msg: typeof Message.ToExtension.prototype) {
       vscode.postMessage(msg);
     }
+
     public sendModify(mod: AutonEdit.Result.Modify<Action>) {
       this.sendMessage(new Message.ToExtension.Modify({ ...mod }));
     }
+
     public sendIndexUpdate(newIndex: number) {
       this.sendMessage(new Message.ToExtension.IndexUpdate(newIndex));
     }
+
     public sendReady() {
       this.sendMessage(new Message.ToExtension.Ready());
     }
   })(this);
 
   eventListeners = new (class EventListeners {
-    private static maxTimeBetweenModMessages = 10;
+    private static readonly maxTimeBetweenModMessages = 10;
 
     constructor(protected view: AutonView) {
       view.auton.onModifyEdit.sub(this.onAutonModified.bind(this));
     }
+
     onAutonViewConstructed() {
       this.view.robot.onDidChangePosition.sub(this.onRobotMoved.bind(this));
       this.view.turnToTarget.onDidChangePosition.sub(
-        this.onTurnToTargetMoved.bind(this)
+        this.onTurnToTargetMoved.bind(this),
       );
     }
+
     private lastRobotMoveTime: DOMHighResTimeStamp = window.performance.now();
     onRobotMoved({
       pos,
@@ -311,23 +335,27 @@ class AutonView {
         (window.performance.now() - this.lastRobotMoveTime <
           EventListeners.maxTimeBetweenModMessages &&
           !reason.includes("webview.DraggableGameObject.onMouseUp"))
-      )
+      ) {
         return;
+      }
       this.lastRobotMoveTime = window.performance.now();
 
       if (!["move_to", "set_pose"].includes(this.view.curAct.type)) return;
-      let newPos: Partial<Position> = { x: pos.x, y: pos.y };
-      if ("set_pose" === this.view.curAct.type)
+      const newPos: Partial<Position> = { x: pos.x, y: pos.y };
+      if (this.view.curAct.type === "set_pose") {
         newPos.heading =
           pos.heading * (this.view.curAct.params.radians ? Math.PI / 180 : 1);
+      }
       this.view.auton.modify({
         newProperties: { params: newPos },
         uuid: this.view.curAct.uuid,
         reason: reason.concat("webview.AutonView.eventListener.onRobotMoved"),
       });
     }
+
     private lastTurnToTargetMoveTime: DOMHighResTimeStamp =
       window.performance.now();
+
     onTurnToTargetMoved({
       pos,
       reason,
@@ -338,13 +366,14 @@ class AutonView {
         (window.performance.now() - this.lastTurnToTargetMoveTime <
           EventListeners.maxTimeBetweenModMessages &&
           !reason.includes("webview.DraggableGameObject.onMouseUp"))
-      )
+      ) {
         return;
+      }
 
       this.lastTurnToTargetMoveTime = window.performance.now();
 
-      if ("turn_to" !== this.view.curAct.type) return;
-      let newTarget: Partial<Position> = { x: pos.x, y: pos.y };
+      if (this.view.curAct.type !== "turn_to") return;
+      const newTarget: Partial<Position> = { x: pos.x, y: pos.y };
       this.view.auton.modify({
         newProperties: {
           params: {
@@ -354,15 +383,16 @@ class AutonView {
         },
         uuid: this.view.curAct.uuid,
         reason: reason.concat(
-          "webview.AutonView.eventListener.onTurnToTargetMoved"
+          "webview.AutonView.eventListener.onTurnToTargetMoved",
         ),
       });
       this.view.reCalculateRobotPos(
-        reason.concat("webview.AutonView.eventListener.onTurnToTargetMoved")
+        reason.concat("webview.AutonView.eventListener.onTurnToTargetMoved"),
       );
     }
+
     onAutonModified(
-      mod: Parameters<Parameters<Auton["_onModifyEdit"]["sub"]>[0]>[0]
+      mod: Parameters<Parameters<Auton["_onModifyEdit"]["sub"]>[0]>[0],
     ) {
       if (mod.reason.some((r) => r.toLowerCase().startsWith("server"))) return;
       if ("uuid" in mod) this.view._onAutonModified(mod);

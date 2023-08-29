@@ -1,0 +1,10 @@
+*
+
+!*/
+!*.js
+!*.ts
+!*.json
+
+dist
+node_modules
+out

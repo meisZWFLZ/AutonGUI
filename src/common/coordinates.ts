@@ -1,15 +1,15 @@
-type Coordinate = {
+interface Coordinate {
   x: number;
   y: number;
-};
-type Rotatable = {
+}
+interface Rotatable {
   /** degrees */
   heading: number;
-};
-type HasMarginOfError = {
+}
+interface HasMarginOfError {
   /** @member margin how far can the robot be from the target? in inches */
   marginOfError: number;
-};
+}
 
 type Position = Coordinate & Rotatable;
 /** responsible for retrieving the dimensions of elements required to convert coordinate systems */
@@ -40,7 +40,7 @@ abstract class ConvertibleCoordinate implements Coordinate {
    */
   public constructor(
     { x = 0, y = 0 }: Coordinate,
-    dimProvider: DimensionProvider
+    dimProvider: DimensionProvider,
   ) {
     this.x = x;
     this.y = y;
@@ -74,6 +74,7 @@ class Relative extends ConvertibleCoordinate {
     console.warn("converting to self!");
     return this;
   }
+
   public toAbsolute(): Absolute {
     const fieldCoord = this._dimProvider.fieldCoord;
     return new Absolute(
@@ -82,7 +83,7 @@ class Relative extends ConvertibleCoordinate {
         x: this.x + fieldCoord.x,
         y: this._dimProvider.fieldWidth + fieldCoord.y + this.y,
       },
-      this._dimProvider
+      this._dimProvider,
     );
     // return {
     //   ...this,
@@ -90,6 +91,7 @@ class Relative extends ConvertibleCoordinate {
     //   y: this._dimProvider.fieldWidth + fieldCoord.y - this.y
     // }
   }
+
   public toPhysical(): Physical {
     const pxPerInch = this._dimProvider.fieldWidth / irlFieldLength;
     const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
@@ -100,7 +102,7 @@ class Relative extends ConvertibleCoordinate {
         x: (this.x + halfRobotWidth) / pxPerInch,
         y: (-this.y + halfRobotWidth) / pxPerInch,
       },
-      this._dimProvider
+      this._dimProvider,
     );
     // return {
     //   ...this,
@@ -108,10 +110,11 @@ class Relative extends ConvertibleCoordinate {
     //   y: (-this.y + halfRobotWidth) / pxPerInch,
     // };
   }
+
   /** untested */
   public static fromCenter(
     coord: Coordinate,
-    dimProvider: DimensionProvider
+    dimProvider: DimensionProvider,
   ): Relative {
     const halfRobotWidth = dimProvider.robotOffsetWidth / 2;
     return new Relative(
@@ -120,9 +123,10 @@ class Relative extends ConvertibleCoordinate {
         x: coord.x - halfRobotWidth,
         y: coord.y + halfRobotWidth,
       },
-      dimProvider
+      dimProvider,
     );
   }
+
   /** untested */
   public getCenter(): Coordinate {
     const halfRobotWidth = this._dimProvider.robotOffsetWidth / 2;
@@ -145,7 +149,7 @@ class Absolute extends ConvertibleCoordinate {
         x: this.x - fieldCoord.x,
         y: this.y - this._dimProvider.fieldWidth - fieldCoord.y,
       },
-      this._dimProvider
+      this._dimProvider,
     );
     // return {
     //   ...this,
@@ -153,6 +157,7 @@ class Absolute extends ConvertibleCoordinate {
     //   y: this.y - this._dimProvider.fieldWidth - fieldCoord.y
     // }
   }
+
   /**
    * @deprecated conversion to self
    */
@@ -160,12 +165,14 @@ class Absolute extends ConvertibleCoordinate {
     console.warn("converting to self!");
     return this;
   }
+
   public toPhysical(): Physical {
     return this.toRelative().toPhysical();
   }
+
   public static fromCenter(
     coord: Coordinate,
-    dimProvider: DimensionProvider
+    dimProvider: DimensionProvider,
   ): Absolute {
     const halfRobotWidth = dimProvider.robotOffsetWidth / 2;
     return new Absolute(
@@ -174,7 +181,7 @@ class Absolute extends ConvertibleCoordinate {
         x: coord.x - halfRobotWidth,
         y: coord.y + halfRobotWidth,
       },
-      dimProvider
+      dimProvider,
     );
   }
 
@@ -201,7 +208,7 @@ class Physical extends ConvertibleCoordinate {
         x: this.x * pxPerInch - halfRobotWidth,
         y: -(this.y * pxPerInch - halfRobotWidth),
       },
-      this._dimProvider
+      this._dimProvider,
     );
     // return {
     //   ...this,
@@ -209,9 +216,11 @@ class Physical extends ConvertibleCoordinate {
     //   y: -(this.y * pxPerInch - halfRobotWidth),
     // };
   }
+
   public toAbsolute(): Absolute {
     return this.toRelative().toAbsolute();
   }
+
   /**
    * @deprecated conversion to self
    */
@@ -243,7 +252,7 @@ class RelativePos extends Relative implements ConvertiblePosition {
   public heading: number;
   constructor(
     pos: { x: number; y: number; heading: number },
-    dimProvider: DimensionProvider
+    dimProvider: DimensionProvider,
   ) {
     super(pos, dimProvider);
     this.heading = pos.heading;
@@ -257,7 +266,7 @@ class AbsolutePos extends Absolute implements ConvertiblePosition {
   public heading: number;
   constructor(
     pos: { x: number; y: number; heading: number },
-    dimProvider: DimensionProvider
+    dimProvider: DimensionProvider,
   ) {
     super(pos, dimProvider);
     this.heading = pos.heading;
@@ -270,7 +279,7 @@ class PhysicalPos extends Physical implements ConvertiblePosition {
   public heading: number;
   constructor(
     pos: { x: number; y: number; heading: number },
-    dimProvider: DimensionProvider
+    dimProvider: DimensionProvider,
   ) {
     super(pos, dimProvider);
     this.heading = pos.heading;
@@ -280,13 +289,15 @@ class PhysicalPos extends Physical implements ConvertiblePosition {
 class CoordinateUtilities {
   static distance(
     { x: x1, y: y1 }: Coordinate,
-    { x: x2, y: y2 }: Coordinate
+    { x: x2, y: y2 }: Coordinate,
   ): number {
     return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
   }
-  private static isNonNullObject(obj: unknown): obj is NonNullable<Object> {
-    return typeof obj == "object" && obj !== null;
+
+  private static isNonNullObject(obj: unknown): obj is NonNullable<object> {
+    return typeof obj === "object" && obj !== null;
   }
+
   static hasMarginOfError(obj: unknown): obj is HasMarginOfError {
     return (
       this.isNonNullObject(obj) &&
@@ -303,6 +314,7 @@ class CoordinateUtilities {
       Number.isFinite(obj.y)
     );
   }
+
   static isRotatable(obj: unknown): obj is Rotatable {
     return (
       this.isNonNullObject(obj) &&
@@ -310,6 +322,7 @@ class CoordinateUtilities {
       Number.isFinite(obj.heading)
     );
   }
+
   static isPosition(obj: unknown): obj is Position {
     return this.isCoordinate(obj) && this.isRotatable(obj);
   }

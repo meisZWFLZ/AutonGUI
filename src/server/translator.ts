@@ -24,33 +24,30 @@ export namespace Translation {
      * @todo modify to not recognize commented actions
      */
     export namespace PATTERNS {
-      export type PatternComposition = (
-        | string
-        | Param
-        | { separator: string }
-        | { indent: number }
-      )[];
-      export type Pattern = {
+      export type PatternComposition = Array<
+        string | Param | { separator: string } | { indent: number }
+      >;
+      export interface Pattern {
         regex: RegExp;
         composition: PatternComposition;
-      };
-      export type Param = {
+      }
+      export interface Param {
         paramName: string;
         type: "string" | "bool" | "int" | "float";
         opt?: boolean;
-      };
-      export const FLOAT: RegExp = /[+-]?(?:\d*\.)?\d+/;
-      export const INT: RegExp = /[+-]?\d+/;
-      export const BOOLEAN: RegExp = /true|false|0|1/;
-      export const STRING: RegExp = /".*"/;
-      export const LINE_COMMENT: RegExp = /\/\/.*$/;
+      }
+      export const FLOAT = /[+-]?(?:\d*\.)?\d+/;
+      export const INT = /[+-]?\d+/;
+      export const BOOLEAN = /true|false|0|1/;
+      export const STRING = /".*"/;
+      export const LINE_COMMENT = /\/\/.*$/;
 
-      export const BLOCK_COMMENT: RegExp = /\/\*[\w\W]*?\*\//;
+      export const BLOCK_COMMENT = /\/\*[\w\W]*?\*\//;
       /* matches spaces and newlines */
-      export const SPACE_AND_LINE: RegExp = /[\s\n]*?/;
+      export const SPACE_AND_LINE = /[\s\n]*?/;
       /** matches text that is ignored by the compiler */
-      export const COMPILER_IGNORES: RegExp = new RegExp(
-        `(?:${LINE_COMMENT.source}|${BLOCK_COMMENT.source}|${SPACE_AND_LINE.source})*`
+      export const COMPILER_IGNORES = new RegExp(
+        `(?:${LINE_COMMENT.source}|${BLOCK_COMMENT.source}|${SPACE_AND_LINE.source})*`,
       );
       /**
        * @param {string} n name of capturing group
@@ -104,10 +101,10 @@ export namespace Translation {
         let optStartIndex: number = params.length;
 
         /** pattern composition will be returned */
-        let composition: PatternComposition = [];
+        const composition: PatternComposition = [];
 
         /** source of regex that will be returned */
-        let outSrc: string = "";
+        let outSrc = "";
 
         /** adds str only to outSrc (used for text that only makes sense in regex) */
         function addRegex(str: string) {
@@ -161,7 +158,7 @@ export namespace Translation {
               }
               return (param.opt ? "(?:" : "") + (i > 0 ? s(",") : "") + out;
             })
-            .join("")
+            .join(""),
         );
         addRegex(")?".repeat(params.length - optStartIndex));
         addSep(")", "\\)");
@@ -215,7 +212,7 @@ export namespace Translation {
       export const STOP_INTAKE: Pattern = func("stopIntake", []);
       export const EXPAND: Pattern = func("expand", []);
 
-      export const PATTERNS: { name: string; pattern: Pattern }[] = [
+      export const PATTERNS: Array<{ name: string; pattern: Pattern }> = [
         { name: "set_pose", pattern: SET_POSE },
         { name: "move_to", pattern: MOVE_TO },
         { name: "turn_to", pattern: TURN_TO },
@@ -235,50 +232,51 @@ export namespace Translation {
         ({ pattern: { regex: pattern }, name }) =>
           Array.from(text.matchAll(pattern)).map((match) => {
             return { action: name, match };
-          })
+          }),
       )
         .sort((a, b) => (a.match.index ?? 0) - (b.match.index ?? 0))
         .map(({ action, match }): ActionWithOffset => {
           const index: number = match.index ?? 0;
           return {
-            // @ts-ignore
+            // @ts-expect-error um well this file isnt used anymore.. but why i didnt use as, idk
             type: action,
-            params: match.groups
-              ? Object.fromEntries(
-                  Object.entries(match.groups).flatMap(
-                    ([groupName, value]): [
-                      string,
-                      number | string | boolean
-                    ][] => {
-                      if (value === undefined || groupName.startsWith("_"))
-                        return [];
-                      const type = groupName.split("_")[0] as
-                        | "bool"
-                        | "int"
-                        | "string"
-                        | "float";
-                      const name = groupName.split("_").slice(1).join("");
-                      let trueValue: boolean | string | number;
-                      switch (type) {
-                        case "bool":
-                          trueValue = value === "true";
-                          break;
-                        case "string":
-                          trueValue = String(value);
-                          break;
-                        case "int":
-                        case "float":
-                          trueValue = Number(value);
-                          break;
-                        default:
-                          trueValue = value as never;
-                          break;
-                      }
-                      return [[name, trueValue]];
-                    }
+            params:
+              match.groups != null
+                ? Object.fromEntries(
+                    Object.entries(match.groups).flatMap(
+                      ([groupName, value]): Array<
+                        [string, number | string | boolean]
+                      > => {
+                        if (value === undefined || groupName.startsWith("_")) {
+                          return [];
+                        }
+                        const type = groupName.split("_")[0] as
+                          | "bool"
+                          | "int"
+                          | "string"
+                          | "float";
+                        const name = groupName.split("_").slice(1).join("");
+                        let trueValue: boolean | string | number;
+                        switch (type) {
+                          case "bool":
+                            trueValue = value === "true";
+                            break;
+                          case "string":
+                            trueValue = String(value);
+                            break;
+                          case "int":
+                          case "float":
+                            trueValue = Number(value);
+                            break;
+                          default:
+                            trueValue = value as never;
+                            break;
+                        }
+                        return [[name, trueValue]];
+                      },
+                    ),
                   )
-                )
-              : {},
+                : {},
             uuid: randomUUID(),
             offset: index,
             endOffset: index + match[0].length,
@@ -289,22 +287,22 @@ export namespace Translation {
         .filter((e): e is ActionWithOffset => ActionTypeGuards.isAction(e));
     }
     export function translateDoc(doc: vscode.TextDocument): Auton<CppAction> {
-      let actionArr: CppAction[] = upgradeOffsetActionToCpp(
+      const actionArr: CppAction[] = upgradeOffsetActionToCpp(
         translateText(doc.getText()),
-        doc
+        doc,
       );
 
       // @todo should instead warn user
       actionArr.splice(
         0,
         actionArr.findIndex((act): act is CppAction & SetPose =>
-          ActionTypeGuards.isSetPose(act)
-        )
+          ActionTypeGuards.isSetPose(act),
+        ),
       );
 
       return new Auton<CppAction>(
         actionArr[0] as SetPose & CppAction,
-        actionArr.slice(1)
+        actionArr.slice(1),
       );
     }
     /**
@@ -314,7 +312,7 @@ export namespace Translation {
      */
     export function translateSubString(
       subStr: string,
-      offset: number
+      offset: number,
     ): ActionWithOffset[] {
       return translateText(subStr).map((action) => {
         return {
@@ -332,14 +330,14 @@ export namespace Translation {
      */
     export function upgradeOffsetActionToCpp(
       arr: ActionWithOffset[],
-      doc: vscode.TextDocument
+      doc: vscode.TextDocument,
     ): CppAction[] {
       return arr.map((act) => {
         return {
           ...act,
           range: new vscode.Range(
             doc.positionAt(act.offset),
-            doc.positionAt(act.endOffset)
+            doc.positionAt(act.endOffset),
           ),
         };
       });
@@ -347,7 +345,7 @@ export namespace Translation {
     /** @returns whether range1 and range2 overlap / intersect  */
     function offsetOverlap(
       range1: { offset: number; endOffset: number },
-      range2: { offset: number; endOffset: number }
+      range2: { offset: number; endOffset: number },
     ): boolean {
       return (
         Math.max(range1.offset, range2.offset) <=
@@ -368,9 +366,9 @@ export namespace Translation {
       auton: Auton<ActionWithOffset>,
       change: vscode.TextDocumentChangeEvent,
       oldDocText: string,
-      reason: string[]
+      reason: string[],
     ): AutonEdit.AutonEdit[] {
-      let edits: AutonEdit.AutonEdit<ActionWithOffset>[] = [];
+      const edits: Array<AutonEdit.AutonEdit<ActionWithOffset>> = [];
       let docText: string = Array.from(oldDocText).join("");
 
       for (const contentChange of change.contentChanges) {
@@ -382,11 +380,11 @@ export namespace Translation {
         const firstAffectedIndex: number = auton.auton.findIndex((action) =>
           // action.range.intersection()
           // contentChange.rangeOffset <= action.offset
-          offsetOverlap(action, changeOffset)
+          offsetOverlap(action, changeOffset),
         );
         // -1 when there is no overlap with any action
         const lastAffectedIndex: number = auton.auton.findLastIndex((action) =>
-          offsetOverlap(action, changeOffset)
+          offsetOverlap(action, changeOffset),
         );
 
         // undefined when there is no overlap with any action
@@ -397,21 +395,24 @@ export namespace Translation {
           auton.auton[lastAffectedIndex];
 
         // offset representing start of affectedText
-        const affectedStart: number = firstAffectedAction
-          ? Math.min(firstAffectedAction.offset, changeOffset.offset)
-          : Math.min(
-              auton.auton.findLast((act) => act.endOffset < changeOffset.offset)
-                ?.endOffset ?? 0,
-              changeOffset.offset
-            );
+        const affectedStart: number =
+          firstAffectedAction != null
+            ? Math.min(firstAffectedAction.offset, changeOffset.offset)
+            : Math.min(
+                auton.auton.findLast(
+                  (act) => act.endOffset < changeOffset.offset,
+                )?.endOffset ?? 0,
+                changeOffset.offset,
+              );
         // offset representing end of affectedText
-        const affectedEnd: number = lastAffectedAction
-          ? Math.max(lastAffectedAction.endOffset, changeOffset.endOffset)
-          : Math.max(
-              auton.auton.find((act) => act.offset > changeOffset.endOffset)
-                ?.offset ?? Infinity,
-              changeOffset.endOffset
-            );
+        const affectedEnd: number =
+          lastAffectedAction != null
+            ? Math.max(lastAffectedAction.endOffset, changeOffset.endOffset)
+            : Math.max(
+                auton.auton.find((act) => act.offset > changeOffset.endOffset)
+                  ?.offset ?? Infinity,
+                changeOffset.endOffset,
+              );
 
         let affectedText: string = contentChange.text;
 
@@ -421,29 +422,30 @@ export namespace Translation {
             auton.auton.findLast((act) => act.endOffset < changeOffset.offset)
               ?.endOffset ?? 0;
           const actionAfterChangeStartOffset: number | undefined =
-            auton.auton.find(
-              (act) => act.offset > changeOffset.endOffset
-            )?.offset;
+            auton.auton.find((act) => act.offset > changeOffset.endOffset)
+              ?.offset;
           affectedText =
             docText.slice(affectedStart, changeOffset.offset) +
             affectedText +
             docText.slice(changeOffset.endOffset, affectedEnd);
         } else {
-          if (affectedStart !== changeOffset.offset)
+          if (affectedStart !== changeOffset.offset) {
             affectedText =
               firstAffectedAction!.text.slice(
                 0,
-                changeOffset.offset - firstAffectedAction!.offset
+                changeOffset.offset - firstAffectedAction!.offset,
               ) + affectedText;
-          if (affectedEnd !== changeOffset.endOffset)
+          }
+          if (affectedEnd !== changeOffset.endOffset) {
             affectedText += lastAffectedAction!.text.slice(
-              changeOffset.endOffset - lastAffectedAction!.endOffset
+              changeOffset.endOffset - lastAffectedAction!.endOffset,
             );
+          }
         }
 
         const newActions: ActionWithOffset[] = translateSubString(
           affectedText,
-          affectedStart
+          affectedStart,
         );
         const edit: AutonEdit.Replace<ActionWithOffset> = {
           action: newActions,
@@ -451,31 +453,35 @@ export namespace Translation {
             lastAffectedIndex === -1 && firstAffectedIndex === -1
               ? 0
               : lastAffectedIndex - firstAffectedIndex + 1,
-          index: firstAffectedAction
-            ? firstAffectedIndex
-            : auton.auton.findLastIndex(
-                (act) => act.offset < changeOffset.offset
-              ) + 1,
+          index:
+            firstAffectedAction != null
+              ? firstAffectedIndex
+              : auton.auton.findLastIndex(
+                  (act) => act.offset < changeOffset.offset,
+                ) + 1,
           reason: reason.concat("server.translator.change"),
         };
         // adjust offsets of all actions after edit
         const offsetAdjustment: number =
           contentChange.text.length - contentChange.rangeLength;
-        const offsetAdjustMods: AutonEdit.Modify<CppAction>[] = [];
+        const offsetAdjustMods: Array<AutonEdit.Modify<CppAction>> = [];
         for (let i = edit.index + edit.count - 1; i < auton.auton.length; i++) {
           if (i < 0) continue;
-          let newProperties: { offset?: number; endOffset?: number } = {};
-          if (auton.auton[i].offset >= changeOffset.endOffset)
+          const newProperties: { offset?: number; endOffset?: number } = {};
+          if (auton.auton[i].offset >= changeOffset.endOffset) {
             newProperties.offset = auton.auton[i].offset + offsetAdjustment;
-          if (auton.auton[i].endOffset > changeOffset.endOffset)
+          }
+          if (auton.auton[i].endOffset > changeOffset.endOffset) {
             newProperties.endOffset =
               auton.auton[i].endOffset + offsetAdjustment;
-          if (newProperties.offset || newProperties.endOffset)
+          }
+          if (newProperties.offset || newProperties.endOffset) {
             offsetAdjustMods.push({
               index: i,
               newProperties,
               reason: reason.concat("server.translator.adjustOffset"),
             });
+          }
         }
         // modify doc text
         docText =
@@ -487,8 +493,9 @@ export namespace Translation {
         if (
           edit.count !== 0 ||
           (Array.isArray(edit.action) && edit.action.length !== 0)
-        )
+        ) {
           edits.push(edit);
+        }
         // perform edit
         auton.makeEdit([...offsetAdjustMods, edit]);
       }
@@ -506,17 +513,16 @@ export namespace Translation {
       doc: vscode.TextDocument,
       edit: AutonEdit.Result.AutonEdit<ActionWithOffset>,
       workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit(),
-      reason: string[]
+      reason: string[],
     ): vscode.WorkspaceEdit {
       const isReplace = AutonEdit.TypeGuards.isReplace(edit);
       const isModify = AutonEdit.TypeGuards.isModify(edit);
       const isMove = AutonEdit.TypeGuards.isMove(edit);
       if (!isReplace && !isModify && !isMove) return workspaceEdit;
 
-      const adjustEdits: (
-        | AutonEdit.Modify<ActionWithOffset>
-        | OffsetAdjustment
-      )[] = [];
+      const adjustEdits: Array<
+        AutonEdit.Modify<ActionWithOffset> | OffsetAdjustment
+      > = [];
       if (isMove) {
         const movedElementsIndex =
           1 +
@@ -533,10 +539,10 @@ export namespace Translation {
         };
         const sourceRange: vscode.Range = upgradeOffsetsToRange(
           sourceOffsets,
-          doc
+          doc,
         );
         const sourceLength = sourceOffsets.endOffset - sourceOffsets.offset;
-        let targetOffsets = {
+        const targetOffsets = {
           offset: auton.auton[movedElementsIndex - 1]?.endOffset ?? 0,
           endOffset:
             auton.auton[movedElementsIndex + edit.sourceEnd - edit.sourceStart]
@@ -559,18 +565,18 @@ export namespace Translation {
         workspaceEdit.insert(
           doc.uri,
           doc.positionAt(targetOffsets.offset),
-          newText
+          newText,
         );
 
         adjustEdits.push(
           ...auton.auton
             .slice(
               movedElementsIndex,
-              movedElementsIndex + edit.sourceEnd - edit.sourceStart
+              movedElementsIndex + edit.sourceEnd - edit.sourceStart,
             )
             .reverse()
             .map((act): AutonEdit.Modify<ActionWithOffset> => {
-              let _offset =
+              const _offset =
                 targetOffsets.offset +
                 act.offset -
                 auton.auton[movedElementsIndex].offset -
@@ -583,11 +589,11 @@ export namespace Translation {
                   offset: _offset,
                 },
                 reason: reason.concat(
-                  "server.translator.translateEdit.adjustOffset"
+                  "server.translator.translateEdit.adjustOffset",
                 ),
                 uuid: act.uuid,
               };
-            })
+            }),
         );
 
         // must fix offsets of any actions after start source index and before end target index
@@ -607,7 +613,7 @@ export namespace Translation {
           const act = auton.auton[index];
           adjustEdits.push({
             reason: reason.concat(
-              "server.translator.translateEdit.adjustOffset"
+              "server.translator.translateEdit.adjustOffset",
             ),
             newProperties: {
               offset:
@@ -654,19 +660,19 @@ export namespace Translation {
           if (
             // is newAct a modified version of an action in affectedAutonActs
             (modifiedAct = affectedAutonActs.find(
-              ({ uuid, type }) => uuid === newAct.uuid && type === newAct.type
+              ({ uuid, type }) => uuid === newAct.uuid && type === newAct.type,
             )) !== undefined
-          )
+          ) {
             // update existing action's params
             adjustEdits.push(
               ...updateActionParams(
                 { ...modifiedAct, params: newAct.params } as ActionWithOffset,
                 doc,
                 reason.concat("server.translator.translateAutonEdit"),
-                workspaceEdit
-              )
+                workspaceEdit,
+              ),
             );
-          else {
+          } else {
             // add new action's text to document
             const newText = generateTextForAction(newAct);
             const actualNewTextLength = newText.trimStart().length;
@@ -681,13 +687,13 @@ export namespace Translation {
                   endOffset: newActEndOffset,
                 },
                 reason: reason.concat(
-                  "server.translator.translateAutonEdit.newOffsets"
+                  "server.translator.translateAutonEdit.newOffsets",
                 ),
               },
               OffsetAdjustment.addNewAction(
                 auton.getIndexFromId(newAct.uuid) + 1,
-                newText.length
-              )
+                newText.length,
+              ),
             );
 
             workspaceEdit.insert(doc.uri, doc.positionAt(writeOffset), newText);
@@ -697,12 +703,13 @@ export namespace Translation {
         }
 
         // removes text associated with the actions that will be deleted
-        if (isReplace)
+        if (isReplace) {
           edit.deletedActs.forEach((act) =>
             adjustEdits.push(
-              OffsetAdjustment.removeAction(act, workspaceEdit, doc)
-            )
+              OffsetAdjustment.removeAction(act, workspaceEdit, doc),
+            ),
           );
+        }
       }
 
       adjustEdits.forEach((adjust) =>
@@ -712,8 +719,8 @@ export namespace Translation {
             : OffsetAdjustment.fillCreateEdits(adjust, {
                 auton,
                 reason: reason.concat("server.translator.translateAutonEdit"),
-              })
-        )
+              }),
+        ),
       );
 
       return workspaceEdit;
@@ -724,14 +731,15 @@ export namespace Translation {
       public end?: number | UUID;
       public reason?: string[];
       constructor(
-        public readonly adjuster: typeof OffsetAdjustment.Adjuster.prototype
+        public readonly adjuster: typeof OffsetAdjustment.Adjuster.prototype,
       ) {}
+
       static changeActionLength(
         action: UUID,
         change: number,
-        group: string
+        group: string,
       ): OffsetAdjustment {
-        let adjustment = new OffsetAdjustment(
+        const adjustment = new OffsetAdjustment(
           new this.Adjuster.SemiDynamic(
             new this.Adjuster.Constant(change),
             Object.fromEntries([
@@ -747,41 +755,43 @@ export namespace Translation {
                         Object.entries(groupIndices)
                           .filter(
                             (entry): entry is [string, [number, number]] =>
-                              entry[1] !== undefined
+                              entry[1] !== undefined,
                           )
                           .map(
                             ([group, [start, end]]): [
                               string,
-                              [number, number]
+                              [number, number],
                             ] => [
                               group,
                               [
                                 start + (start >= changeOffset ? change : 0),
                                 end + (end >= changeOffset ? change : 0),
                               ],
-                            ]
-                          )
+                            ],
+                          ),
                       ),
                     };
-                  }
+                  },
                 ),
               ],
-            ])
-          )
+            ]),
+          ),
         );
         adjustment.start = action;
         return adjustment;
       }
+
       static addNewAction(
         actionIndex: number,
-        newTextLength: number
+        newTextLength: number,
       ): OffsetAdjustment {
-        let adjustment = new OffsetAdjustment(
-          new this.Adjuster.Constant(newTextLength)
+        const adjustment = new OffsetAdjustment(
+          new this.Adjuster.Constant(newTextLength),
         );
         adjustment.start = actionIndex;
         return adjustment;
       }
+
       /**
        * @description updates workspaceEdit and creates a OffsetAdjustment representing removal of action
        *
@@ -797,19 +807,20 @@ export namespace Translation {
           endOffset,
         }: Pick<ActionWithOffset, "uuid" | "offset" | "endOffset">,
         workspaceEdit: vscode.WorkspaceEdit,
-        doc: vscode.TextDocument
+        doc: vscode.TextDocument,
       ): OffsetAdjustment {
         const newOffset = offset - doc.positionAt(offset).character - 1;
-        let adjustment = new OffsetAdjustment(
-          new this.Adjuster.Constant(newOffset - endOffset)
+        const adjustment = new OffsetAdjustment(
+          new this.Adjuster.Constant(newOffset - endOffset),
         );
         workspaceEdit.delete(
           doc.uri,
-          upgradeOffsetsToRange({ offset: newOffset, endOffset }, doc)
+          upgradeOffsetsToRange({ offset: newOffset, endOffset }, doc),
         );
         adjustment.start = uuid;
         return adjustment;
       }
+
       public static fill(
         adjustment: OffsetAdjustment,
         filling: {
@@ -822,18 +833,21 @@ export namespace Translation {
             OffsetAdjustment,
             "end" | "start"
           >]?: OffsetAdjustment[k];
-        }
+        },
       ): Parameters<typeof OffsetAdjustment.createEdits>[0] {
         adjustment.auton ??= filling.auton;
         adjustment.start ??= filling?.start ?? 0;
         adjustment.end ??= filling?.end ?? adjustment.auton.auton.length;
         adjustment.reason ??= filling.reason;
-        if (typeof adjustment.start === "string")
+        if (typeof adjustment.start === "string") {
           adjustment.start = adjustment.auton.getIndexFromId(adjustment.start);
-        if (typeof adjustment.end === "string")
+        }
+        if (typeof adjustment.end === "string") {
           adjustment.end = adjustment.auton.getIndexFromId(adjustment.end);
+        }
         return adjustment as Parameters<typeof OffsetAdjustment.createEdits>[0];
       }
+
       public static createEdits({
         auton,
         start,
@@ -842,7 +856,7 @@ export namespace Translation {
         reason,
       }: {
         [k in keyof OffsetAdjustment]-?: Exclude<OffsetAdjustment[k], UUID>;
-      }): AutonEdit.Modify<ActionWithOffset>[] {
+      }): Array<AutonEdit.Modify<ActionWithOffset>> {
         return auton.auton
           .slice(start, end)
           .map((act, index): AutonEdit.Modify<ActionWithOffset> => {
@@ -850,17 +864,19 @@ export namespace Translation {
               newProperties: adjuster.adjust(act),
               index,
               reason: reason.concat(
-                "server.translator.createAdjustOffsetEdits.adjustOffset"
+                "server.translator.createAdjustOffsetEdits.adjustOffset",
               ),
             };
           });
       }
+
       public static fillCreateEdits(
         adjustment: OffsetAdjustment,
-        filling: Parameters<typeof OffsetAdjustment.fill>[1]
-      ): AutonEdit.Modify<ActionWithOffset>[] {
+        filling: Parameters<typeof OffsetAdjustment.fill>[1],
+      ): Array<AutonEdit.Modify<ActionWithOffset>> {
         return this.createEdits(this.fill(adjustment, filling));
       }
+
       static Adjuster = class Adjuster {
         adjust({
           offset,
@@ -873,10 +889,12 @@ export namespace Translation {
         > {
           throw "Method Unimplemented";
         }
+
         static Constant = class Constant extends Adjuster {
           constructor(public readonly adjustment: number) {
             super();
           }
+
           override adjust({
             offset,
             endOffset,
@@ -889,16 +907,17 @@ export namespace Translation {
                 Object.entries(groupIndices)
                   .filter(
                     (entry): entry is [string, [number, number]] =>
-                      entry[1] !== undefined
+                      entry[1] !== undefined,
                   )
                   .map(([group, [start, end]]): [string, [number, number]] => [
                     group,
                     [start + this.adjustment, end + this.adjustment],
-                  ])
+                  ]),
               ),
             };
           }
         };
+
         static Dynamic = class Dynamic extends Adjuster {
           constructor(
             public override readonly adjust: ({
@@ -908,20 +927,22 @@ export namespace Translation {
             }: Omit<ActionWithOffset, "params" | "type" | "text">) => Omit<
               ActionWithOffset,
               "params" | "type" | "text" | "uuid"
-            >
+            >,
           ) {
             super();
           }
         };
+
         static SemiDynamic = class SemiDynamic extends Adjuster {
           constructor(
             public readonly defaultAdjuster: Adjuster,
             public readonly adjusterMap: {
               [k: UUID]: Adjuster;
-            }
+            },
           ) {
             super();
           }
+
           override adjust({
             offset,
             endOffset,
@@ -947,15 +968,15 @@ export namespace Translation {
       action: ActionWithOffset,
       doc: vscode.TextDocument,
       reason: string[],
-      workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit()
-    ): (OffsetAdjustment | AutonEdit.Modify<ActionWithOffset>)[] {
+      workspaceEdit: vscode.WorkspaceEdit = new vscode.WorkspaceEdit(),
+    ): Array<OffsetAdjustment | AutonEdit.Modify<ActionWithOffset>> {
       const currActionText: string = action.text;
       let updatedActionText: string = action.text;
       let updatedEndOffset: number = action.endOffset;
       return [
         {
           reason: reason.concat(
-            "server.translator.updateActionParams.adjustText"
+            "server.translator.updateActionParams.adjustText",
           ),
           newProperties: { text: updatedActionText },
           uuid: action.uuid,
@@ -963,7 +984,7 @@ export namespace Translation {
         ...Object.entries(action.groupIndices)
           .filter(
             (entry): entry is [string, [number, number]] =>
-              !entry[0].startsWith("_") && entry[1] !== undefined
+              !entry[0].startsWith("_") && entry[1] !== undefined,
           )
           // remove type from group and get param name
           .map(([group, indices]): [string, [number, number], string] => [
@@ -981,26 +1002,25 @@ export namespace Translation {
             )[group]?.toString();
             const currText = currActionText.slice(
               start - action.offset,
-              end - action.offset
+              end - action.offset,
             );
-            let returnVal: (
-              | OffsetAdjustment
-              | AutonEdit.Modify<ActionWithOffset>
-            )[] = [];
+            const returnVal: Array<
+              OffsetAdjustment | AutonEdit.Modify<ActionWithOffset>
+            > = [];
             if (newText && newText !== currText) {
               workspaceEdit.replace(
                 doc.uri,
                 upgradeOffsetsToRange({ offset: start, endOffset: end }, doc),
-                newText
+                newText,
               );
               updatedActionText =
                 updatedActionText.slice(
                   undefined,
-                  start - action.endOffset + updatedEndOffset
+                  start - action.endOffset + updatedEndOffset,
                 ) +
                 newText +
                 updatedActionText.slice(
-                  end - action.endOffset + updatedEndOffset
+                  end - action.endOffset + updatedEndOffset,
                 );
               if (newText.length !== currText.length) {
                 updatedEndOffset += newText.length - currText.length;
@@ -1008,8 +1028,8 @@ export namespace Translation {
                   OffsetAdjustment.changeActionLength(
                     action.uuid,
                     newText.length - currText.length,
-                     groupType + "_" + group
-                  )
+                    groupType + "_" + group,
+                  ),
                 );
               }
             }
@@ -1023,9 +1043,9 @@ export namespace Translation {
      */
     export function generateTextForAction(
       action: Action,
-      indent: string = "\t"
+      indent = "\t",
     ): string {
-      let actionParamsAsMap = action.params as {
+      const actionParamsAsMap = action.params as {
         [k: string]: boolean | number | string | undefined;
       };
       let paramsLeft: number = Object.keys(action.params).length;
@@ -1034,13 +1054,14 @@ export namespace Translation {
           if (typeof e === "object") {
             if ("separator" in e) return e.separator;
             if ("indent" in e) return "\t".repeat(e.indent);
-            if ("paramName" in e && e.paramName in action.params)
+            if ("paramName" in e && e.paramName in action.params) {
               return (
                 (e.type == "string"
                   ? `"${actionParamsAsMap[e.paramName]!.toString()}"`
                   : actionParamsAsMap[e.paramName]!.toString()) +
                 (--paramsLeft > 0 ? ", " : "")
               );
+            }
             return "";
           }
           return e;
@@ -1055,11 +1076,11 @@ export namespace Translation {
         offset: number;
         endOffset: number;
       },
-      doc: vscode.TextDocument
+      doc: vscode.TextDocument,
     ): vscode.Range {
       return new vscode.Range(
         doc.positionAt(offset),
-        doc.positionAt(endOffset)
+        doc.positionAt(endOffset),
       );
     }
   }

@@ -9,7 +9,7 @@
     "strict": true,
     "rootDirs": ["src"],
     "moduleResolution": "nodenext",
-    "incremental": true,
+    "incremental": true
   },
   "include": ["./src/**/*"],
   "exclude": ["node_modules", ".vscode-test"]

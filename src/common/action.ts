@@ -2,7 +2,7 @@ import { UUID } from "crypto";
 import { Position } from "./coordinates.js";
 
 export namespace BaseAction {
-  export type Params = {};
+  export type Params = object;
 }
 /**
  * @interface Action an action that can be performed by the robot
@@ -104,74 +104,74 @@ export interface Wait extends BaseAction<Wait.Params> {
 }
 
 export namespace ActionTypeGuards {
-  export function isBaseAction(obj: any): obj is BaseAction<{}> {
+  export function isBaseAction(obj: any): obj is BaseAction<BaseAction.Params> {
     return ["params", "type"].every((e) => e in obj);
   }
   /**
    * @warn does not check params!
    */
   export function isWait(obj: unknown): obj is Wait {
-    return isBaseAction(obj) && obj.type == "wait";
+    return isBaseAction(obj) && obj.type === "wait";
   }
   /**
    * @warn does not check params!
    */
   export function isStopIntake(obj: unknown): obj is StopIntake {
-    return isBaseAction(obj) && obj.type == "stop_intake";
+    return isBaseAction(obj) && obj.type === "stop_intake";
   }
   /**
    * @warn does not check params!
    */
   export function isIntake(obj: unknown): obj is Intake {
-    return isBaseAction(obj) && obj.type == "intake";
+    return isBaseAction(obj) && obj.type === "intake";
   }
   /**
    * @warn does not check params!
    */
   export function isPistonShoot(obj: unknown): obj is PistonShoot {
-    return isBaseAction(obj) && obj.type == "piston_shoot";
+    return isBaseAction(obj) && obj.type === "piston_shoot";
   }
   /**
    * @warn does not check params!
    */
   export function isShoot(obj: unknown): obj is Shoot {
-    return isBaseAction(obj) && obj.type == "shoot";
+    return isBaseAction(obj) && obj.type === "shoot";
   }
   /**
    * @warn does not check params!
    */
   export function isExpand(obj: unknown): obj is Expand {
-    return isBaseAction(obj) && obj.type == "expand";
+    return isBaseAction(obj) && obj.type === "expand";
   }
   /**
    * @warn does not check params!
    */
   export function isRoller(obj: unknown): obj is Roller {
-    return isBaseAction(obj) && obj.type == "roller";
+    return isBaseAction(obj) && obj.type === "roller";
   }
   /**
    * @warn does not check params!
    */
   export function isFollow(obj: unknown): obj is Follow {
-    return isBaseAction(obj) && obj.type == "follow";
+    return isBaseAction(obj) && obj.type === "follow";
   }
   /**
    * @warn does not check params!
    */
   export function isTurnTo(obj: unknown): obj is TurnTo {
-    return isBaseAction(obj) && obj.type == "turn_to";
+    return isBaseAction(obj) && obj.type === "turn_to";
   }
   /**
    * @warn does not check params!
    */
   export function isGoTo(obj: unknown): obj is MoveTo {
-    return isBaseAction(obj) && obj.type == "move_to";
+    return isBaseAction(obj) && obj.type === "move_to";
   }
   /**
    * @warn does not check params!
    */
   export function isSetPose(obj: unknown): obj is SetPose {
-    return isBaseAction(obj) && obj.type == "set_pose";
+    return isBaseAction(obj) && obj.type === "set_pose";
   }
   /**
    * @warn does not check params!

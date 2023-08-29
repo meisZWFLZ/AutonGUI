@@ -11,7 +11,7 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.commands
         .executeCommand<vscode.DocumentSymbol[]>(
           "vscode.executeDocumentSymbolProvider",
-          vscode.window.activeTextEditor?.document.uri
+          vscode.window.activeTextEditor?.document.uri,
         )
         .then(async (symbols: vscode.DocumentSymbol[]) => {
           console.log(symbols);
@@ -22,14 +22,14 @@ export function activate(context: vscode.ExtensionContext) {
                 .executeCommand(
                   "clangd.ast.retrieve",
                   s.range,
-                  vscode.window.activeTextEditor?.document.uri
+                  vscode.window.activeTextEditor?.document.uri,
                 )
-                .then((ast) => console.log(`"${s.name}": `, ast))
+                .then((ast) => console.log(`"${s.name}": `, ast)),
             );
         });
-    })
+    }),
   );
-  new Conductor(context)
+  new Conductor(context);
   // create Auton List View
   // let autonView: AutonTreeProvider = new AutonTreeProvider(context);
 
@@ -120,4 +120,6 @@ export function activate(context: vscode.ExtensionContext) {
 /**
  * Deactivate the extension.
  */
-export function deactivate(): void {}
+export function deactivate(): void {
+  // function body..
+}

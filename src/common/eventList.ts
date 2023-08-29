@@ -30,7 +30,10 @@ export namespace ListAction {
   export class Insert<T> extends ListAction<T> {
     public override readonly type: LIST_ACTION_TYPE.INSERT =
       LIST_ACTION_TYPE.INSERT;
-    constructor(public readonly index: number, public readonly element: T) {
+    constructor(
+      public readonly index: number,
+      public readonly element: T,
+    ) {
       super(LIST_ACTION_TYPE.INSERT);
     }
 
@@ -47,7 +50,10 @@ export namespace ListAction {
     public override readonly type: LIST_ACTION_TYPE.REPLACE =
       LIST_ACTION_TYPE.REPLACE;
     public oldElement: T[] | undefined;
-    constructor(public readonly index: number, public readonly newElement: T) {
+    constructor(
+      public readonly index: number,
+      public readonly newElement: T,
+    ) {
       super(LIST_ACTION_TYPE.REPLACE);
     }
 
@@ -66,7 +72,10 @@ export namespace ListAction {
       LIST_ACTION_TYPE.REMOVE;
     public removedElements: T[] | undefined;
 
-    constructor(public readonly index: number, public readonly count: number) {
+    constructor(
+      public readonly index: number,
+      public readonly count: number,
+    ) {
       super(LIST_ACTION_TYPE.REMOVE);
     }
 
@@ -75,9 +84,9 @@ export namespace ListAction {
     }
 
     undo(list: T[]): void {
-      if (this.removedElements)
+      if (this.removedElements != null) {
         list.splice(this.index, 0, ...this.removedElements);
-      else throw new Error("remove action not yet performed");
+      } else throw new Error("remove action not yet performed");
     }
   }
 }
@@ -87,10 +96,10 @@ export namespace ListAction {
  */
 export default class EventList<T> {
   protected _list: T[];
-  private undoStack: ListAction<T>[] = [];
-  private redoStack: ListAction<T>[] = [];
+  private readonly undoStack: Array<ListAction<T>> = [];
+  private redoStack: Array<ListAction<T>> = [];
 
-  public getEdits(): ListAction<T>[] {
+  public getEdits(): Array<ListAction<T>> {
     return this.undoStack;
   }
 
@@ -99,9 +108,10 @@ export default class EventList<T> {
     this.undoStack.push(action);
     this.redoStack = [];
   }
+
   constructor(list?: T[]) {
     // super();
-    this._list = list || [];
+    this._list = list != null || [];
     // this.addEventListener("add", ({ element }: { element: T }) =>
     //   this.performNewAction(new ListAction.Append<T>(element))
     // );
@@ -159,7 +169,7 @@ export default class EventList<T> {
 
   public undo() {
     const action = this.undoStack.pop();
-    if (action) {
+    if (action != null) {
       action.undo(this._list);
       this.redoStack.push(action);
     }
@@ -167,7 +177,7 @@ export default class EventList<T> {
 
   public redo() {
     const action = this.redoStack.pop();
-    if (action) {
+    if (action != null) {
       action.do(this._list);
       this.undoStack.push(action);
     }
@@ -176,6 +186,7 @@ export default class EventList<T> {
   public setList(list: T[]): void {
     this._list = list;
   }
+
   get list(): T[] {
     return this._list;
   }

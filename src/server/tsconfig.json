@@ -3,5 +3,5 @@
   "compilerOptions": {
     "outDir": "./../../out/server/"
   },
-  "include": [".//**/*"],
+  "include": [".//**/*"]
 }

@@ -12,7 +12,7 @@ import type { ACTION, Node as MyNode } from "../common/node.js";
 import ListManager from "./listManager.js";
 import { ListAction, LIST_ACTION_TYPE } from "../common/eventList.js";
 
-// @ts-ignore
+// @ts-expect-error vscode silly
 const vscode = acquireVsCodeApi();
 vscode.postMessage(new Message.ToExtension.Ready());
 

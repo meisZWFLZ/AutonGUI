@@ -155,15 +155,20 @@
       }
     ]
   },
-  "extensionDependencies": ["llvm-vs-code-extensions.vscode-clangd"],	
+  "extensionDependencies": [
+    "llvm-vs-code-extensions.vscode-clangd"
+  ],
   "scripts": {
     "vscode:prepublish": "npm run build",
     "build": "npm run pack-webview && npm run compile-server",
     "compile-server": "tsc --project ./src/server/tsconfig.json",
     "compile-webview": "tsc --project ./src/webview/tsconfig.json",
-    "lint": "eslint \"src/**/*.ts\"",
+    "lint": "eslint \"src/**/*.ts\" --fix",
+    "format": "prettier . --write",
+    "clean": "npm run lint && npm run format",
     "watch": "tsc -w -p ./",
-    "pack-webview": "npm run compile-webview && webpack"
+    "pack-webview": "npm run compile-webview && webpack",
+    "prepare": "husky install"
   },
   "devDependencies": {
     "@types/node": "^16.11.7",
@@ -172,6 +177,9 @@
     "@typescript-eslint/eslint-plugin": "^5.42.0",
     "@typescript-eslint/parser": "^5.42.0",
     "eslint": "^8.26.0",
+    "eslint-config-prettier": "^9.0.0",
+    "husky": "^8.0.3",
+    "prettier": "3.0.2",
     "typescript": "^5.0.2",
     "webpack": "^5.85.0",
     "webpack-cli": "^5.1.3"

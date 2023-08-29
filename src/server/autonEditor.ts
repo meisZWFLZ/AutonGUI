@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 /// @ts-nocheck
 
 import * as vscode from "vscode";
@@ -11,19 +12,19 @@ import { ISimpleEvent } from "strongly-typed-events";
 import { UUID } from "crypto";
 
 type CppAuton = Auton<Translation.CppAction>;
-type DocumentInfo = {
+interface DocumentInfo {
   auton: CppAuton;
   // /** informs text edit listener that the edit is due to this class and that it can ignore it */
   // modifiedText: boolean;
   /** edits made by AutonEditorProvider, used to indicate when an edit may be ignored by the edit listener */
-  edits: { range: vscode.Range; newText: string }[];
+  edits: Array<{ range: vscode.Range; newText: string }>;
   /** must have at least 1 index */
   indices: [number, ...number[]];
   content: string;
   unSubOnEdit: ReturnType<
     ISimpleEvent<AutonEdit.AutonEdit<Translation.ActionWithOffset>>["sub"]
   >;
-};
+}
 
 /**
  * Provider for paw draw editors.
@@ -46,15 +47,15 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   private static autonView: AutonTreeProvider;
   public static register(
     context: vscode.ExtensionContext,
-    autonView: AutonTreeProvider
+    autonView: AutonTreeProvider,
   ): vscode.Disposable[] {
     this.provider = new AutonEditorProvider(context);
     const providerRegistration = vscode.window.registerCustomEditorProvider(
       AutonEditorProvider.viewType,
-      this.provider
+      this.provider,
     );
     const docInfoRemover = vscode.workspace.onDidCloseTextDocument((doc) =>
-      this.provider.deleteDocInfo(doc)
+      this.provider.deleteDocInfo(doc),
     );
     this.autonView = autonView;
     return [providerRegistration, docInfoRemover];
@@ -63,7 +64,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   resolveCustomTextEditor(
     document: vscode.TextDocument,
     webviewPanel: vscode.WebviewPanel,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): void {
     // Setup initial content for the webview
     webviewPanel.webview.options = {
@@ -73,7 +74,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
 
     const webviewDisposables: vscode.Disposable[] = [
       webviewPanel.webview.onDidReceiveMessage((msg) =>
-        this.messageListener({ webviewPanel, document, msg })
+        this.messageListener({ webviewPanel, document, msg }),
       ),
       ...this.eventListeners.initialize({
         webviewPanel,
@@ -81,9 +82,10 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       }),
     ];
     webviewPanel.onDidDispose(
-      vscode.Disposable.from(...webviewDisposables).dispose
+      vscode.Disposable.from(...webviewDisposables).dispose,
     );
   }
+
   /**
    * maps document uris to their respective info
    */
@@ -94,12 +96,14 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   protected getDocInfo(doc: vscode.TextDocument | vscode.Uri): DocumentInfo {
     return this.documentInfo[("uri" in doc ? doc.uri : doc).toString()];
   }
+
   protected setDocInfo(
     doc: vscode.TextDocument,
-    docInfo: DocumentInfo
+    docInfo: DocumentInfo,
   ): DocumentInfo {
     return (this.documentInfo[doc.uri.toString()] = docInfo);
   }
+
   protected deleteDocInfo(doc: vscode.TextDocument): boolean {
     return delete this.documentInfo[doc.uri.toString()];
   }
@@ -108,8 +112,9 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   protected getAuton(doc: vscode.TextDocument): CppAuton {
     // console.log("GET AUTON")
     return /* AutonEditorProvider.autonView.setAuton( */ this.getDocInfo(doc)
-      .auton /* ) */;
+      .auton; /* ) */
   }
+
   /** sets auton associated with document */
   protected setAuton(doc: vscode.TextDocument, auton: CppAuton): CppAuton {
     console.log("SET AUTON");
@@ -117,24 +122,28 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     const uri = doc.uri.toString();
     const info = this.documentInfo[uri];
     if (info !== undefined && typeof info === "object") info.auton = auton;
-    else
+    else {
       this.documentInfo[uri] = {
-        auton: auton,
+        auton,
         indices: [0],
         edits: [],
         content: doc.getText(),
+        // eslint-disable-next-line @typescript-eslint/no-empty-function
         unSubOnEdit: () => {},
       };
+    }
     return auton;
   }
+
   /** gets auton associated with document */
   protected getAutonIndices(doc: vscode.TextDocument): [number, ...number[]] {
     return this.getDocInfo(doc).indices;
   }
+
   /** gets auton associated with document */
   protected setAutonIndices(
     doc: vscode.TextDocument,
-    indices: [number, ...number[]]
+    indices: [number, ...number[]],
   ): [number, ...number[]] {
     return (this.getDocInfo(doc).indices = indices);
   }
@@ -157,27 +166,30 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   //   } else this._tryToAddFirstEdit(attempts + 1);
   // }
 
-  private _queueForNewWEdit: (() => void)[] = [];
+  private readonly _queueForNewWEdit: Array<() => void> = [];
 
-  private _wEditUnApplied: boolean = false;
+  private _wEditUnApplied = false;
   /** hopefully should prevent workspace edits from being made until preceding edits are applied */
   protected async getNewWorkspaceEdit() {
-    if (this._wEditUnApplied)
+    if (this._wEditUnApplied) {
       await new Promise<void>((resolve, reject) =>
-        this._queueForNewWEdit.push(resolve)
+        this._queueForNewWEdit.push(resolve),
       );
+    }
     this._wEditUnApplied = true;
     console.log("wEditCreated");
     return new vscode.WorkspaceEdit();
   }
+
   private _onFinishedAddingEdit() {
     this._queueForNewWEdit.shift()?.();
     this._wEditUnApplied = this._queueForNewWEdit.length > 0;
     console.log("addedWEdit");
   }
+
   private async _tryToAddEdit(
     wEdit: vscode.WorkspaceEdit,
-    attempts: number = 0
+    attempts = 0,
   ): Promise<void> {
     if (wEdit.size <= 0) {
       this._onFinishedAddingEdit();
@@ -187,14 +199,15 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       this._onFinishedAddingEdit();
       wEdit
         .entries()
-        .forEach(([uri, edits]) =>
-          this.getDocInfo(uri)?.edits.filter(
-            (docE) =>
-              !edits.some(
-                (wE) =>
-                  wE.newText === docE.newText && wE.range.isEqual(docE.range)
-              )
-          )
+        .forEach(
+          ([uri, edits]) =>
+            this.getDocInfo(uri)?.edits.filter(
+              (docE) =>
+                !edits.some(
+                  (wE) =>
+                    wE.newText === docE.newText && wE.range.isEqual(docE.range),
+                ),
+            ),
         );
       console.error("too many attempts to apply wEdit: ", wEdit);
       throw "too many attempts, giving up now";
@@ -204,17 +217,22 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       return this._onFinishedAddingEdit();
     } else this._tryToAddEdit(wEdit, attempts + 1);
   }
+
   /**
    * applies {@link wEdit} and adds it to document info to indicate
    * the source of the edit to the onDidChangeTextDocument listener
    */
-  protected applyWorkspaceEdit(wEdit: vscode.WorkspaceEdit): Promise<void> {
-    if (wEdit.size > 0)
+  protected async applyWorkspaceEdit(
+    wEdit: vscode.WorkspaceEdit,
+  ): Promise<void> {
+    if (wEdit.size > 0) {
       wEdit
         .entries()
         .forEach(([uri, edits]) => this.getDocInfo(uri)?.edits.push(...edits));
-    return this._tryToAddEdit(wEdit);
+    }
+    return await this._tryToAddEdit(wEdit);
   }
+
   /**
    * Finds whether change is due to {@link AutonEditorProvider this} and if so removes corresponding edits from {@link documentInfo}
    * @param changeEv change event
@@ -223,10 +241,10 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   protected isFromThis(changeEv: vscode.TextDocumentChangeEvent): boolean {
     return changeEv.contentChanges.reduce((output, contentChange) => {
       const curEdits = this.getDocInfo(changeEv.document).edits;
-      let newEdits = curEdits.filter(
+      const newEdits = curEdits.filter(
         (edit) =>
           edit.range.isEqual(contentChange.range) &&
-          edit.newText == contentChange.text
+          edit.newText == contentChange.text,
       );
       if (newEdits.length === curEdits.length) return output;
 
@@ -239,11 +257,11 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
    * @returns visible text editors associated with document; if none are found, returns an empty array.
    */
   protected tryToGetTextEditors(
-    document: vscode.TextDocument
+    document: vscode.TextDocument,
   ): vscode.TextEditor[] {
     const compareTo = document.uri.toString();
     return vscode.window.visibleTextEditors.filter(
-      (e) => e.document.uri.toString() === compareTo
+      (e) => e.document.uri.toString() === compareTo,
     );
   }
 
@@ -251,14 +269,14 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
    * Translates the document to an auton
    */
   protected static translateDoc(
-    doc: vscode.TextDocument
+    doc: vscode.TextDocument,
   ): Auton<Translation.CppAction> {
     return Translation.CppToAuton.translateDoc(doc);
   }
 
   protected translateAndSetAuton(
     document: vscode.TextDocument,
-    webviewPanel: vscode.WebviewPanel
+    webviewPanel: vscode.WebviewPanel,
   ) {
     try {
       this.getDocInfo(document)?.unSubOnEdit();
@@ -266,19 +284,20 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         webviewPanel,
         new Message.ToWebview.AutonUpdate(
           AutonEditorProvider.autonView.setAuton(
-            this.setAuton(document, AutonEditorProvider.translateDoc(document))
+            this.setAuton(document, AutonEditorProvider.translateDoc(document)),
           ).auton as unknown as AutonData,
-          0
-        )
+          0,
+        ),
       );
       this.getDocInfo(document).unSubOnEdit = this.getAuton(
-        document
-      ).onEdit.sub((event) =>
-        this.eventListeners.onAutonEdit({
-          webviewPanel,
-          document,
-          event,
-        })
+        document,
+      ).onEdit.sub(
+        async (event) =>
+          await this.eventListeners.onAutonEdit({
+            webviewPanel,
+            document,
+            event,
+          }),
       );
     } catch (err) {
       console.error(err);
@@ -312,6 +331,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       // console.log({ setAuton: this.editorProvider.getAuton(document) });
       // Translation.AutonToCpp.generateTextForAction(Auton.createIntake());
     }
+
     onUpdateIndex({
       webviewPanel,
       document,
@@ -326,6 +346,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       if (editors.length <= 0) return;
       // interpret auton index and change selection in text editor
     }
+
     onEdit({
       webviewPanel,
       document,
@@ -371,12 +392,13 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   }): void {
     const ToExt = Message.ToExtension;
     if (!ToExt.test(msg)) return;
-    if (ToExt.Ready.test(msg))
+    if (ToExt.Ready.test(msg)) {
       this.msgListeners.onReady({ webviewPanel, document, msg });
-    else if (ToExt.IndexUpdate.test(msg))
+    } else if (ToExt.IndexUpdate.test(msg)) {
       this.msgListeners.onUpdateIndex({ webviewPanel, document, msg });
-    else if (ToExt.Modify.test(msg))
+    } else if (ToExt.Modify.test(msg)) {
       this.msgListeners.onEdit({ webviewPanel, document, msg });
+    }
   }
 
   protected eventListeners = new (class EventListeners {
@@ -390,18 +412,27 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     }): vscode.Disposable[] {
       return [
         vscode.window.onDidChangeTextEditorSelection((event) =>
-          this.onDidChangeTextEditorSelection({ webviewPanel, document, event })
+          this.onDidChangeTextEditorSelection({
+            webviewPanel,
+            document,
+            event,
+          }),
         ),
         vscode.workspace.onDidChangeTextDocument((event) =>
-          this.onDidChangeTextDocument({ webviewPanel, document, event })
+          this.onDidChangeTextDocument({ webviewPanel, document, event }),
         ),
-        AutonEditorProvider.autonView.view.onDidChangeSelection((event) =>
-          this.onAutonViewDidChangeSelection({ webviewPanel, document, event })
+        AutonEditorProvider.autonView.view.onDidChangeSelection(
+          async (event) =>
+            await this.onAutonViewDidChangeSelection({
+              webviewPanel,
+              document,
+              event,
+            }),
         ),
         new vscode.Disposable(
           AutonEditorProvider.autonView.onRefreshCommand.sub(() =>
-            this.onAutonViewRefresh({ webviewPanel, document })
-          )
+            this.onAutonViewRefresh({ webviewPanel, document }),
+          ),
         ),
         vscode.commands.registerCommand(
           "vrc-auton.list-view.highlightGroupIndicesNext",
@@ -409,7 +440,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
             this.onCommandHighlightGroupIndicesNext({
               webviewPanel,
               document,
-            })
+            }),
         ),
         vscode.commands.registerCommand(
           "vrc-auton.list-view.highlightGroupIndicesPrevious",
@@ -417,7 +448,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
             this.onCommandHighlightGroupIndicesPrevious({
               webviewPanel,
               document,
-            })
+            }),
         ),
         vscode.commands.registerCommand(
           "vrc-auton.list-view.highlightGroupIndicesAll",
@@ -425,10 +456,11 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
             this.onCommandHighlightGroupIndicesAll({
               webviewPanel,
               document,
-            })
+            }),
         ),
       ];
     }
+
     onDidChangeTextEditorSelection({
       webviewPanel,
       document,
@@ -438,8 +470,9 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       document: vscode.TextDocument;
       event: { textEditor: vscode.TextEditor };
     }) {
-      if (textEditor.document.uri.toString() !== document.uri.toString())
+      if (textEditor.document.uri.toString() !== document.uri.toString()) {
         return;
+      }
       // interpret selection as an index in the auton array and send to webview
 
       this.onDidChangeAutonIndex({
@@ -452,16 +485,17 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
               (s) =>
                 Translation.AutonToCpp.upgradeOffsetsToRange(
                   act,
-                  document
-                ).intersection(s) !== undefined
-            )
+                  document,
+                ).intersection(s) !== undefined,
+            ),
           )
           .map(({ uuid }) =>
-            this.editorProvider.getAuton(document).getIndexFromId(uuid)
+            this.editorProvider.getAuton(document).getIndexFromId(uuid),
           ),
         reason: ["server.editor.eventListener.onDidChangeTextEditorSelection"],
       });
     }
+
     onDidChangeTextDocument({
       webviewPanel,
       document,
@@ -481,12 +515,12 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           webviewPanel,
           Translation.CppToAuton.changeAuton(
             this.editorProvider.getAuton(
-              document
+              document,
             ) as unknown as Auton<Translation.ActionWithOffset>,
             event,
             this.editorProvider.getDocInfo(document).content,
-            ["server.editor.eventListeners.onDidChangeTextDocument"]
-          )
+            ["server.editor.eventListeners.onDidChangeTextDocument"],
+          ),
         );
       }
       const text = document.getText();
@@ -496,7 +530,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           return text;
         },
         auton: JSON.parse(
-          JSON.stringify(this.editorProvider.getAuton(document).auton)
+          JSON.stringify(this.editorProvider.getAuton(document).auton),
         ),
         offset: this.editorProvider
           .getAuton(document)
@@ -508,6 +542,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       // always update content if event modifies document
       this.editorProvider.getDocInfo(document).content = document.getText();
     }
+
     async onAutonEdit({
       webviewPanel,
       document,
@@ -522,8 +557,9 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         (edit.reason.at(-1) !== "server.editor.msgListener.onEdit" &&
           edit.reason.some((r) => r.startsWith("server.editor"))) ||
         AutonEdit.TypeGuards.isReplace(edit)
-      )
+      ) {
         return;
+      }
       console.log({
         from: "onAutonEdit",
         webviewPanel,
@@ -533,46 +569,49 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       const applyWEditPromise = this.editorProvider.applyWorkspaceEdit(
         Translation.AutonToCpp.translateAutonEdit(
           this.editorProvider.getAuton(
-            document
+            document,
           ) as unknown as Auton<Translation.ActionWithOffset>,
           document,
           edit as AutonEdit.Result.AutonEdit<Translation.ActionWithOffset>,
           await this.editorProvider.getNewWorkspaceEdit(),
-          edit.reason.concat("server.editor.eventListener.onAutonEdit")
-        )
+          edit.reason.concat("server.editor.eventListener.onAutonEdit"),
+        ),
       );
-      if (edit.reason.at(-1) !== "server.editor.msgListener.onEdit")
+      if (edit.reason.at(-1) !== "server.editor.msgListener.onEdit") {
         this.editorProvider.postEdits(webviewPanel, [
           {
             ...edit,
             reason: edit.reason.concat(
-              "server.editor.eventListener.onAutonEdit"
+              "server.editor.eventListener.onAutonEdit",
             ),
           },
         ]);
-      else {
+      } else {
         if (
           edit.reason.at(-1) &&
           AutonEdit.TypeGuards.isModify(edit) &&
           "uuid" in edit
-        )
+        ) {
           applyWEditPromise
             .then(() =>
               this.editorProvider.postMessage(
                 webviewPanel,
-                Message.ToWebview.ModifyResponse.respondWithSuccess(edit.uuid)
-              )
+                Message.ToWebview.ModifyResponse.respondWithSuccess(edit.uuid),
+              ),
             )
             .catch(() =>
               this.editorProvider.postMessage(
                 webviewPanel,
-                Message.ToWebview.ModifyResponse.respondWithFailure(edit.uuid)
-              )
+                Message.ToWebview.ModifyResponse.respondWithFailure(edit.uuid),
+              ),
             );
-        if (Array.isArray(this.currentGroup))
+        }
+        if (Array.isArray(this.currentGroup)) {
           this.onCommandHighlightGroupIndicesAll({ webviewPanel, document });
+        }
       }
     }
+
     async onAutonViewDidChangeSelection({
       webviewPanel,
       document,
@@ -586,11 +625,12 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         webviewPanel,
         document,
         newIndex: selection.map(({ id }) =>
-          this.editorProvider.getAuton(document).getIndexFromId(id)
+          this.editorProvider.getAuton(document).getIndexFromId(id),
         ),
         reason: ["server.editor.eventListener.onAutonViewDidChangeSelection"],
       });
     }
+
     onAutonViewRefresh({
       webviewPanel,
       document,
@@ -600,6 +640,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     }) {
       this.editorProvider.translateAndSetAuton(document, webviewPanel);
     }
+
     currentGroup?: string[] | string;
     /**
      * Called by {@link onAutonViewDidChangeSelection} and {@link onDidChangeTextEditorSelection} to synchronize the index between editor, treeView, and webviewPanel
@@ -615,21 +656,22 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
       webviewPanel: vscode.WebviewPanel;
       document: vscode.TextDocument;
     }) {
-      let newIndices = Array.isArray(newIndex) ? newIndex : [newIndex];
+      const newIndices = Array.isArray(newIndex) ? newIndex : [newIndex];
       if (newIndices.length <= 0) return;
       if (
         !newIndices.every(
-          (e, i) => e == this.editorProvider.getAutonIndices(document)?.[i]
+          (e, i) => e == this.editorProvider.getAutonIndices(document)?.[i],
         )
-      )
+      ) {
         this.editorProvider.postMessage(
           webviewPanel,
-          new Message.ToWebview.IndexUpdate(newIndices[0])
+          new Message.ToWebview.IndexUpdate(newIndices[0]),
         );
+      }
 
       this.editorProvider.setAutonIndices(
         document,
-        newIndices as [number, ...number[]]
+        newIndices as [number, ...number[]],
       );
 
       if (
@@ -637,14 +679,15 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           "server.editor.eventListener.onAutonViewDidChangeSelection" &&
         vscode.window.activeTextEditor?.document.uri.toString() ===
           document.uri.toString()
-      )
+      ) {
         newIndices.forEach((i) => {
           const item = AutonEditorProvider.autonView.getTreeItemFromId(
-            this.editorProvider.getAuton(document).auton[i].uuid
+            this.editorProvider.getAuton(document).auton[i].uuid,
           );
           if (!item) return;
           AutonEditorProvider.autonView.view.reveal(item, { select: true });
         });
+      }
       if (
         reason[0] !==
         "server.editor.eventListener.onDidChangeTextEditorSelection" /* &&
@@ -652,14 +695,15 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           document.uri.toString() */
       ) {
         let editor = vscode.window.visibleTextEditors.find(
-          (editor) => editor.document.uri === document.uri
+          (editor) => editor.document.uri === document.uri,
         );
-        if (!editor) editor = await vscode.window.showTextDocument(document);
+        if (editor == null)
+          editor = await vscode.window.showTextDocument(document);
         if (!editor) return;
 
         editor.selections = newIndices
           .flatMap((i) => {
-            let act = this.editorProvider.getAuton(document).auton[i];
+            const act = this.editorProvider.getAuton(document).auton[i];
             return (
               Array.isArray(this.currentGroup)
                 ? this.currentGroup
@@ -669,7 +713,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
                 (group): group is string | undefined =>
                   group === undefined ||
                   (group in act.groupIndices &&
-                    act.groupIndices[group] !== undefined)
+                    act.groupIndices[group] !== undefined),
               )
               .map((group) =>
                 Translation.AutonToCpp.upgradeOffsetsToRange(
@@ -679,13 +723,14 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
                         endOffset: act.groupIndices[group]![1],
                       }
                     : act,
-                  document
-                )
+                  document,
+                ),
               );
           })
           .map(({ end, start }) => new vscode.Selection(start, end));
       }
     }
+
     onCommandHighlightGroupIndicesNext({
       webviewPanel,
       document,
@@ -703,13 +748,14 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           actGroups.indexOf(
             Array.isArray(this.currentGroup)
               ? this.currentGroup[0]
-              : this.currentGroup
+              : this.currentGroup,
           ) + 1;
         while (
           actGroups.at(index) !== undefined &&
           actGroupIndices[actGroups.at(index)!] === undefined
-        )
+        ) {
           index++;
+        }
         this.currentGroup = actGroups.at(index);
         this.onDidChangeAutonIndex({
           webviewPanel,
@@ -719,6 +765,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         });
       }
     }
+
     onCommandHighlightGroupIndicesPrevious({
       webviewPanel,
       document,
@@ -736,13 +783,14 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
           actGroups.indexOf(
             Array.isArray(this.currentGroup)
               ? this.currentGroup[0]
-              : this.currentGroup
+              : this.currentGroup,
           ) - 1;
         while (
           actGroups.at(index) !== undefined &&
           actGroupIndices[actGroups.at(index)!] === undefined
-        )
+        ) {
           index--;
+        }
         this.currentGroup = actGroups.at(index);
         this.onDidChangeAutonIndex({
           webviewPanel,
@@ -752,6 +800,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
         });
       }
     }
+
     onCommandHighlightGroupIndicesAll({
       webviewPanel,
       document,
@@ -765,7 +814,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
             this.editorProvider.getAutonIndices(document)[0]
           ].groupIndices;
         this.currentGroup = Object.keys(groupIndices).filter(
-          (group) => groupIndices[group] !== undefined
+          (group) => groupIndices[group] !== undefined,
         );
         this.onDidChangeAutonIndex({
           webviewPanel,
@@ -785,38 +834,38 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   private getHtmlForWebview(webview: vscode.Webview): string {
     // Local path to script and css for the webview
     const scriptUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._context.extensionUri, "dist", "main.bundle.js")
+      vscode.Uri.joinPath(this._context.extensionUri, "dist", "main.bundle.js"),
     );
 
     const styleResetUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._context.extensionUri, "media", "reset.css")
+      vscode.Uri.joinPath(this._context.extensionUri, "media", "reset.css"),
     );
 
     const styleVSCodeUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._context.extensionUri, "media", "vscode.css")
+      vscode.Uri.joinPath(this._context.extensionUri, "media", "vscode.css"),
     );
 
     const styleMainUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._context.extensionUri, "media", "wflAuton.css")
+      vscode.Uri.joinPath(this._context.extensionUri, "media", "wflAuton.css"),
     );
 
     const FieldSvgUri = webview.asWebviewUri(
       vscode.Uri.joinPath(
         this._context.extensionUri,
         "media",
-        "SpinUpField.svg"
-      )
+        "SpinUpField.svg",
+      ),
     );
 
     const RobotSvgUri = webview.asWebviewUri(
-      vscode.Uri.joinPath(this._context.extensionUri, "media", "robot.svg")
+      vscode.Uri.joinPath(this._context.extensionUri, "media", "robot.svg"),
     );
     const TurnToTargetSvgUri = webview.asWebviewUri(
       vscode.Uri.joinPath(
         this._context.extensionUri,
         "media",
-        "turnToTarget.svg"
-      )
+        "turnToTarget.svg",
+      ),
     );
 
     // Use a nonce to whitelist which scripts can be run
@@ -835,8 +884,8 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
   				<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${
             webview.cspSource
           } blob:; style-src ${
-      webview.cspSource
-    }; script-src 'nonce-${nonce}';">
+            webview.cspSource
+          }; script-src 'nonce-${nonce}';">
 
   				<meta name="viewport" content="width=device-width, initial-scale=1.0">
   		<link href="${styleResetUri}" rel="stylesheet" />
@@ -859,7 +908,7 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
     // <img class="robot"
     //  src="${robotPngUri}"
     //  alt="robot">
-    //<div class="drawing-canvas"></div>
+    // <div class="drawing-canvas"></div>
     // <div class="drawing-controls">
     // 	<button data-color="black" class="black active" title="Black"></button>
     // 	<button data-color="white" class="white" title="White"></button>
@@ -875,36 +924,39 @@ export class AutonEditorProvider implements vscode.CustomTextEditorProvider {
 
   private readonly _callbacks = new Map<UUID, (response: any) => void>();
 
-  private postMessageWithResponse<R = unknown>(
+  private async postMessageWithResponse<R = unknown>(
     panel: vscode.WebviewPanel,
-    msg: typeof Message.ToWebview.prototype
+    msg: typeof Message.ToWebview.prototype,
   ): Promise<R> {
     // const requestId = this._requestId++;
     const p = new Promise<R>((resolve) => this._callbacks.set(msg.id, resolve));
     // panel.webview.postMessage({ type, requestId, body });
     panel.webview.postMessage(msg);
-    return p;
+    return await p;
   }
+
   private postEdits(
     panel: vscode.WebviewPanel,
-    edits: AutonEdit.AutonEdit<Action>[],
-    newIndex?: number
+    edits: Array<AutonEdit.AutonEdit<Action>>,
+    newIndex?: number,
   ) {
     const filteredEdits = edits.filter(
       (e) =>
         ["adjustOffset", "adjustText"].every(
-          (endStr) => !e.reason.at(-1)?.endsWith(endStr)
-        ) && e.reason.every((r) => !r.startsWith("webview"))
+          (endStr) => !e.reason.at(-1)?.endsWith(endStr),
+        ) && e.reason.every((r) => !r.startsWith("webview")),
     );
-    if (filteredEdits.length > 0)
+    if (filteredEdits.length > 0) {
       this.postMessage(
         panel,
-        new Message.ToWebview.Edit(filteredEdits, newIndex)
+        new Message.ToWebview.Edit(filteredEdits, newIndex),
       );
+    }
   }
+
   private postMessage(
     panel: vscode.WebviewPanel,
-    msg: typeof Message.ToWebview.prototype /* type: string, body: any */
+    msg: typeof Message.ToWebview.prototype /* type: string, body: any */,
   ): void {
     // console.log("postMessage: ", { panel, msg });
     panel.webview.postMessage(/* { type, body } */ msg);

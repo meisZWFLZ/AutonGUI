@@ -7,7 +7,7 @@ import {
 } from "../common/coordinates.js";
 // console.log(Coordinates)
 // let { AbsoluteCoord, PhysicalCoord, PhysicalPos } = Coordinates;
-/* 
+/*
 In this document, I often use the terms "IRL", "Rel", and "Abs" to refers to the dimensions and measurements
 "IRL" - inches of the physical field
 "Rel" - pixels relative to field
@@ -69,6 +69,7 @@ export class Robot {
   getIRLPos(): PhysicalPos {
     return this.#pos;
   }
+
   /**
    * in pixels relative to window
    * @returns {AbsolutePos}
@@ -78,11 +79,13 @@ export class Robot {
     // const halfRobotWidth = this.robotEl.offsetWidth / 2;
     return AbsolutePos.fromCenter(
       {
-        x:0,y:0
+        x: 0,
+        y: 0,
       },
-      this.#pos._dimProvider
+      this.#pos._dimProvider,
     );
   }
+
   /**
    * move bot to IRL pos
    * @param {PhysicalPos | PhysicalCoord | {heading: number}} pos
@@ -113,7 +116,7 @@ export class Robot {
    */
   #setPos(
     pos: PhysicalPos,
-    opts: { duration: number } = { duration: 200 }
+    opts: { duration: number } = { duration: 200 },
   ): string {
     // if (pos.heading != undefined) this.#pos.heading = pos.heading;
     // if (pos.x != undefined) this.#pos.x = pos.x;
@@ -126,7 +129,7 @@ export class Robot {
       ((Math.sqrt(2 * Math.pow(this.#radiusIRL, 2)) - this.#radiusIRL) *
         (1 - Math.cos((4 * this.#pos.heading * Math.PI) / 180))) /
         2 +
-        this.#radiusIRL
+        this.#radiusIRL,
     );
 
     // maximum possible x pos for bot
@@ -134,25 +137,26 @@ export class Robot {
 
     this.#pos.x = Math.max(
       Math.min(Math.round(this.#pos.x), maxX),
-      horizontalRadius
+      horizontalRadius,
     );
     this.#pos.y = Math.max(
       Math.min(Math.round(this.#pos.y), maxX),
-      horizontalRadius
+      horizontalRadius,
     );
 
     // console.log(pos);
     const relPos = pos.toRelative();
-    ;
+
     // this.robotEl.animate(
     //   [{ transform: this.robotEl.transform }, { transform }],
     //   {
     //     duration: opts.duration,
     //   }
     // );
-    // @ts-ignore
+    // @ts-expect-error what ig trying to get stuff to compile!?
     return (this.robotEl.style.transform = transform);
   }
+
   #pos: PhysicalPos;
   // #lengthIRL;
   #radiusIRL: number;
@@ -163,7 +167,7 @@ export class Robot {
    */
   constructor(
     element: SVGImageElement,
-    pos: PhysicalPos /* opts = { followCursor: true } */
+    pos: PhysicalPos /* opts = { followCursor: true } */,
   ) {
     this.robotEl = element;
     this.#pos = pos;

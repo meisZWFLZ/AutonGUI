@@ -19,35 +19,37 @@ export class WebviewManager {
     enableScripts: true,
   };
 
-  constructor(private _context: vscode.ExtensionContext) {}
+  constructor(private readonly _context: vscode.ExtensionContext) {}
 
   private createWebviewTitle(): string {
     return `Auton: ${this.functionName}()`;
   }
+
   create(
     viewColumn: Parameters<typeof vscode.window.createWebviewPanel>[2] = vscode
-      .ViewColumn.Beside
+      .ViewColumn.Beside,
   ) {
-    if (this.panel) throw "this.panel already defined";
+    if (this.panel != null) throw "this.panel already defined";
     this._context.subscriptions.push(
       (this.panel = vscode.window.createWebviewPanel(
         "vrc-auton.builder",
         this.createWebviewTitle(),
         viewColumn,
-        WebviewManager.webviewOptions
-      ))
+        WebviewManager.webviewOptions,
+      )),
     );
     this.panel.webview.html = this.getWebviewHtml();
     this.onDidReceiveWebviewMessage?.(
       this.MsgListener.onMessage.bind(this.MsgListener),
-      this._context.subscriptions
+      this._context.subscriptions,
     );
   }
 
   show(viewColumn?: vscode.ViewColumn, preserveFocus?: boolean) {
-    if (!this.panel) throw "this.panel undefined";
+    if (this.panel == null) throw "this.panel undefined";
     this.panel.reveal(viewColumn, preserveFocus);
   }
+
   disposePanel() {
     this.panel?.dispose();
     this.panel = undefined;
@@ -76,24 +78,23 @@ export class WebviewManager {
     keyof typeof WebviewManager.resourceUriMap,
     vscode.Uri
   > {
-    if (!this.panel) throw "this.panel undefined";
+    if (this.panel == null) throw "this.panel undefined";
     return Object.fromEntries(
       (
-        Object.entries(WebviewManager.resourceUriMap) as [
-          keyof typeof WebviewManager.resourceUriMap,
-          string[]
-        ][]
+        Object.entries(WebviewManager.resourceUriMap) as Array<
+          [keyof typeof WebviewManager.resourceUriMap, string[]]
+        >
       ).map(([resource, uri]) => [
         resource,
         this.panel!.webview.asWebviewUri(
-          vscode.Uri.joinPath(this._context.extensionUri, ...uri)
+          vscode.Uri.joinPath(this._context.extensionUri, ...uri),
         ),
-      ])
+      ]),
     ) as Record<keyof typeof WebviewManager.resourceUriMap, vscode.Uri>;
   }
 
   private getWebviewHtml(): string {
-    if (!this.panel) throw "this.panel undefined";
+    if (this.panel == null) throw "this.panel undefined";
     // Local path to script and css for the webview
     const uris = this.getWebviewResourceUris();
     // Use a nonce to whitelist which scripts can be run
@@ -131,8 +132,8 @@ export class WebviewManager {
   }
 
   private getNumericalIndex(index: number | UUID = this.autonIndex): number {
-    if (typeof index == "number") return index;
-    if (!this.auton) throw "this.auton undefined";
+    if (typeof index === "number") return index;
+    if (this.auton == null) throw "this.auton undefined";
     return this.auton.getIndexFromId(index);
   }
 
@@ -144,86 +145,96 @@ export class WebviewManager {
     this.postMessage(
       new Message.ToWebview.AutonUpdate(
         this.auton.auton,
-        this.getNumericalIndex()
-      )
+        this.getNumericalIndex(),
+      ),
     );
-    if (this.panel) this.panel.title = this.createWebviewTitle();
+    if (this.panel != null) this.panel.title = this.createWebviewTitle();
   }
+
   editAuton(
     edit: AutonEdit.AutonEdit | AutonEdit.AutonEdit[],
-    index?: number | UUID
+    index?: number | UUID,
   ) {
-    if (!this.auton) throw "this.auton undefined";
+    if (this.auton == null) throw "this.auton undefined";
     this.auton.makeEdit(edit);
     this.postMessage(
       new Message.ToWebview.Edit(
         Array.isArray(edit) ? edit : [edit],
-        index !== undefined ? this.getNumericalIndex() : undefined
-      )
+        index !== undefined ? this.getNumericalIndex() : undefined,
+      ),
     );
     if (index) this.setAutonIndex(index);
   }
+
   setAutonIndex(index: number | UUID) {
     this.autonIndex = index;
     this.postMessage(
-      new Message.ToWebview.IndexUpdate(this.getNumericalIndex())
+      new Message.ToWebview.IndexUpdate(this.getNumericalIndex()),
     );
   }
+
   postMessage(msg: Message) {
     return this.panel?.webview.postMessage(msg);
   }
 
   private readonly MsgListener = new (class MsgListener {
-    constructor(private manager: WebviewManager) {}
+    constructor(private readonly manager: WebviewManager) {}
     onMessage(msg: Message) {
       try {
         if (!Message.ToExtension.test(msg)) return;
         if (Message.ToExtension.Ready.test(msg)) this.onReady(msg);
-        else if (Message.ToExtension.IndexUpdate.test(msg))
+        else if (Message.ToExtension.IndexUpdate.test(msg)) {
           this.onIndexUpdate(msg);
-        else if (Message.ToExtension.Modify.test(msg)) this.onModify(msg);
+        } else if (Message.ToExtension.Modify.test(msg)) this.onModify(msg);
       } catch (e) {
         console.error(e);
         throw e;
       }
     }
+
     onModify({ mod }: typeof Message.ToExtension.Modify.prototype) {
       this.manager.auton?.makeEdit(mod);
     }
+
     onIndexUpdate({
       newIndex,
     }: typeof Message.ToExtension.IndexUpdate.prototype) {
       this.manager.autonIndex = newIndex;
       this.manager._onAutonIndexUpdate.fire(newIndex);
     }
-    onReady({}: typeof Message.ToExtension.Ready.prototype) {
-      if (!this.manager.auton) throw "auton undefined";
+
+    onReady(_ignored: typeof Message.ToExtension.Ready.prototype) {
+      if (this.manager.auton == null) throw "auton undefined";
       if (this.manager.autonIndex === -1) throw "autonIndex == -1";
       this.manager.postMessage(
         new Message.ToWebview.AutonUpdate(
           this.manager.auton.auton,
-          this.manager.getNumericalIndex()
-        )
+          this.manager.getNumericalIndex(),
+        ),
       );
     }
   })(this);
 
   // events
-  private _onAutonIndexUpdate = new vscode.EventEmitter<number>();
+  private readonly _onAutonIndexUpdate = new vscode.EventEmitter<number>();
   public get onAutonIndexUpdate(): vscode.Event<number> {
     return this._onAutonIndexUpdate.event;
   }
+
   public get onDidDisposePanel(): vscode.Event<void> | undefined {
     return this.panel?.onDidDispose;
   }
+
   public get onDidChangePanelViewState():
     | vscode.Event<vscode.WebviewPanelOnDidChangeViewStateEvent>
     | undefined {
     return this.panel?.onDidChangeViewState;
   }
+
   public get onDidReceiveWebviewMessage(): vscode.Event<Message> | undefined {
     return this.panel?.webview.onDidReceiveMessage;
   }
+
   public get onAutonModifyEdit() {
     return this.auton?.onModifyEdit;
   }

@@ -14,7 +14,7 @@ export type Circle = Coordinate & {
   radius: number;
 };
 
-/** circle that will update graphically whenever modified (all measurements in px)*/
+/** circle that will update graphically whenever modified (all measurements in px) */
 export class DrawableCircle implements Circle {
   /**
    * @param width width of canvas
@@ -34,19 +34,20 @@ export class DrawableCircle implements Circle {
       clear: true,
       circumferenceWidth: 10,
       strokeStyle: "red",
-    }
+    },
   ) {
     this.draw();
   }
 
   public draw() {
-    if (this.opts.clear)
+    if (this.opts.clear) {
       this.context.clearRect(
         0,
         0,
         this.canvasDims.width,
-        this.canvasDims.height
+        this.canvasDims.height,
       );
+    }
     this.context.strokeStyle = this.opts.strokeStyle;
     this.context.beginPath();
     this.context.lineWidth = this.opts.circumferenceWidth; // make circle thicker
@@ -57,7 +58,7 @@ export class DrawableCircle implements Circle {
       // 100,
       this._radius,
       0,
-      2 * Math.PI
+      2 * Math.PI,
     );
     this.context.stroke();
     console.log("draw", { ...this.center, this: this });
@@ -66,27 +67,34 @@ export class DrawableCircle implements Circle {
   public get center(): Coordinate {
     return this._center;
   }
+
   public set center(c: Coordinate) {
     this._center = c;
     this.draw();
   }
+
   public get radius(): number {
     return this._radius;
   }
+
   public set radius(r: number) {
     this._radius = r;
     this.draw();
   }
+
   public get x(): number {
     return this._center.x;
   }
+
   public set x(x1: number) {
     this.center.x = x1;
     this.draw();
   }
+
   public get y(): number {
     return this._center.y;
   }
+
   public set y(y1: number) {
     this.center.y = y1;
     this.draw();
@@ -97,19 +105,22 @@ export class LengthConverter {
   private static get irlFieldLength(): number {
     return 12 * 2 * 6;
   }
+
   protected pxPerInch: Readonly<number>;
   constructor(dimProvider: DimensionProvider) {
     this.pxPerInch = dimProvider.fieldWidth / LengthConverter.irlFieldLength;
   }
+
   public inches = new (class inches {
-    constructor(private outerClass: LengthConverter) {}
+    constructor(private readonly outerClass: LengthConverter) {}
     public toPX(inches: number): number {
       console.log({ inches, pxPerInch: this.outerClass.pxPerInch });
       return inches * this.outerClass.pxPerInch;
     }
   })(this);
+
   public px = new (class px {
-    public constructor(private outerClass: LengthConverter) {}
+    public constructor(private readonly outerClass: LengthConverter) {}
     public toInches(px: number): number {
       console.log({ px, pxPerInch: this.outerClass.pxPerInch });
       return px / this.outerClass.pxPerInch;
@@ -137,11 +148,11 @@ export default class ErrorManager implements HasMarginOfError {
     protected readonly opts?: {
       lineWidth?: number;
       distanceFromCircumference?: number;
-    }
+    },
   ) {
     this.lenConverter = new LengthConverter(_dimProvider);
 
-    let _context = canvas.getContext("2d");
+    const _context = canvas.getContext("2d");
     if (!_context) throw "no context";
 
     this.context = _context;
@@ -150,7 +161,7 @@ export default class ErrorManager implements HasMarginOfError {
       this.lenConverter.inches.toPX(robotCoord.marginOfError),
       this.context,
       this.canvas,
-      { circumferenceWidth: 5, clear: true, strokeStyle: "red" }
+      { circumferenceWidth: 5, clear: true, strokeStyle: "red" },
     );
 
     this.registerEventListeners(canvas);
@@ -159,27 +170,29 @@ export default class ErrorManager implements HasMarginOfError {
   public get marginOfError(): number {
     return this.lenConverter.px.toInches(this.circle.radius);
   }
+
   public set marginOfError(marginOfError: number) {
     this.circle.radius = this.lenConverter.inches.toPX(marginOfError);
   }
 
   public update(
     coord: ConvertibleCoordinate & HasMarginOfError,
-    opts: { emitChangeEvent: boolean } = { emitChangeEvent: false }
+    opts: { emitChangeEvent: boolean } = { emitChangeEvent: false },
   ) {
     if (CoordinateUtilities.hasMarginOfError(coord)) {
       this.marginOfError = coord.marginOfError;
       if (opts.emitChangeEvent) this.onErrorChanged?.(this.marginOfError);
     }
-    if (CoordinateUtilities.isCoordinate(coord))
+    if (CoordinateUtilities.isCoordinate(coord)) {
       this.circle.center = coord.toRelative().getCenter();
+    }
   }
 
   /** @param mouse in px */
   protected isMouseOnCircumference(mouse: ConvertibleCoordinate): boolean {
     const distance = CoordinateUtilities.distance(
       this.circle,
-      mouse.toRelative().getCenter()
+      mouse.toRelative().getCenter(),
     );
     const difference = distance - this.circle.radius;
     const abs = Math.abs(difference);
@@ -203,11 +216,11 @@ export default class ErrorManager implements HasMarginOfError {
 
   /** @param circumferentialPt in px */
   protected setRadiusUsingCircumferentialPt(
-    circumferentialPt: ConvertibleCoordinate
+    circumferentialPt: ConvertibleCoordinate,
   ) {
     this.circle.radius = CoordinateUtilities.distance(
       this.circle,
-      circumferentialPt.toRelative().getCenter()
+      circumferentialPt.toRelative().getCenter(),
     );
   }
 
@@ -217,15 +230,16 @@ export default class ErrorManager implements HasMarginOfError {
     el.addEventListener("mousemove", this.onmousemove.bind(this));
   }
 
-  private dragging: boolean = false;
+  private dragging = false;
   private onmousedown(ev: MouseEvent) {
     console.log("mousedown", this, "ev", ev);
     if (
       (this.dragging = this.isMouseOnCircumference(
-        AbsolutePos.fromCenter(ev, this._dimProvider)
+        AbsolutePos.fromCenter(ev, this._dimProvider),
       ))
-    )
+    ) {
       return;
+    }
     const bottomEl = document.elementsFromPoint(ev.x, ev.y)[1] as HTMLElement;
     // const entries = Object.entries(ev);
     // console.log("entries", structuredClone(entries));
@@ -256,20 +270,23 @@ export default class ErrorManager implements HasMarginOfError {
       altKey: ev.altKey,
       button: ev.button,
       buttons: ev.buttons,
-    } */
+    } */,
     );
 
     console.log("bottomEl", bottomEl, "newEv", newEv);
     bottomEl.dispatchEvent(newEv);
   }
+
   private onmouseup() {
     if (this.dragging) this.onErrorChanged?.(this.marginOfError);
     this.dragging = false;
   }
+
   private onmousemove(coord: MouseEvent) {
-    if (this.dragging)
+    if (this.dragging) {
       this.setRadiusUsingCircumferentialPt(
-        AbsolutePos.fromCenter(coord, this._dimProvider)
+        AbsolutePos.fromCenter(coord, this._dimProvider),
       );
+    }
   }
 }

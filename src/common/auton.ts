@@ -24,12 +24,12 @@ function randomUUID(): UUID {
   return uuidV4() as UUID;
 }
 
-export type AutonData<A extends BaseAction<{}> = Action> = [
+export type AutonData<A extends BaseAction<object> = Action> = [
   SetPose & A,
-  ...A[]
+  ...A[],
 ];
 
-export default class Auton<A extends BaseAction<{}> = Action> {
+export default class Auton<A extends BaseAction<object> = Action> {
   protected _auton: AutonData<A>;
 
   constructor(startPos: SetPose & A, actions: A[] = []) {
@@ -53,6 +53,7 @@ export default class Auton<A extends BaseAction<{}> = Action> {
   public get auton(): AutonData<Readonly<A>> {
     return this._auton;
   }
+
   // public set auton(auton: AutonData<A>) {
   //   this._auton = auton;
   //   this.onModified?.();
@@ -64,12 +65,15 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     };
     this._onModified.dispatch();
   }
+
   public getStartPos(): Position {
     return this.auton[0].params;
   }
+
   public append(acts: A[], reason: AutonEdit.Base["reason"]) {
     this.replace({ action: acts, index: this._auton.length, count: 0, reason });
   }
+
   /**
    * @throws if inserting action not of type {@link SetPose} into the 0th index
    */
@@ -78,7 +82,7 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     index,
     count = 0,
     reason,
-  }: AutonEdit.Insert<A>): (A | (SetPose & A))[] {
+  }: AutonEdit.Insert<A>): Array<A | (SetPose & A)> {
     const acts: A[] = Array.isArray(_act) ? _act : [_act];
     if (
       index == 0 &&
@@ -86,10 +90,12 @@ export default class Auton<A extends BaseAction<{}> = Action> {
         ActionTypeGuards.isSetPose(acts[0]) ||
         CoordinateUtilities.isPosition(acts[0].params)
       )
-    )
+    ) {
       throw 'auton.insert(): cannot put an action not of type "SetPose" in 0th index of auton';
+    }
     return this.replace({ index, count, action: acts, reason });
   }
+
   /**
    * @throws if replacing 0th index with an action not of type {@link SetPose}
    */
@@ -98,7 +104,7 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     index,
     count,
     reason,
-  }: AutonEdit.Replace<A>): (A | (SetPose & A))[] {
+  }: AutonEdit.Replace<A>): Array<A | (SetPose & A)> {
     const acts: A[] = Array.isArray(_act) ? _act : [_act];
     // ignore for now as this should alert the user (todo)
     // if (
@@ -119,6 +125,7 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     });
     return out;
   }
+
   /**
    * @throws if removing 0th element
    */
@@ -127,11 +134,13 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     count = 1,
     action = [],
     reason,
-  }: AutonEdit.Remove): (A | (SetPose & A))[] {
-    if (index == 0)
+  }: AutonEdit.Remove): Array<A | (SetPose & A)> {
+    if (index == 0) {
       throw "auton.remove(): cannot remove the 0th element of auton";
+    }
     return this.replace({ index, count, action, reason });
   }
+
   /**
    * @throws if modifying 0th element's params to a non positional type
    */
@@ -147,35 +156,40 @@ export default class Auton<A extends BaseAction<{}> = Action> {
     ) {
       const oldProperties = Object.fromEntries(
         Object.entries(this.auton[index]).filter(([key]) =>
-          Object.keys(mod.newProperties).includes(key[0])
-        )
+          Object.keys(mod.newProperties).includes(key[0]),
+        ),
       ) as AutonEdit.Result.Modify<A>["oldProperties"];
       this._auton[index] = { ...this.auton[index], ...mod.newProperties };
       this._onModifyEdit.dispatch({ ...mod, oldProperties });
-    } else
+    } else {
       throw "auton.modify(): cannot set start position to non positional type";
+    }
   }
+
   /**
    * @throws if moving element to or from 0th index
    */
   public move(moveEdit: AutonEdit.Move) {
-    let {
+    const {
       sourceStart: start,
       sourceEnd: end,
       insertionIndex: index,
     } = moveEdit;
     try {
-      if (start >= end)
+      if (start >= end) {
         throw "auton.move(): sourceStart must be smaller than sourceEnd";
+      }
       if (
         end > this.auton.length ||
         index >= this.auton.length ||
         end < 1 ||
         start < 0
-      )
+      ) {
         throw "auton.move(): out of auton array bounds";
-      if (start <= index && index <= end)
+      }
+      if (start <= index && index <= end) {
         throw "auton.move(): cannot move source to an insertionIndex within source";
+      }
       this.insert({
         action: this.remove({
           index: start,
@@ -192,6 +206,7 @@ export default class Auton<A extends BaseAction<{}> = Action> {
       console.error(error);
     }
   }
+
   /**
    * @description performs edits starting from the 0th index
    * @throws if inserting action not of type {@link SetPose} into the 0th index
@@ -199,8 +214,10 @@ export default class Auton<A extends BaseAction<{}> = Action> {
    * @throws if removing 0th element
    * @throws if moving element to or from 0th index
    */
-  public makeEdit(_edit: AutonEdit.AutonEdit<A> | AutonEdit.AutonEdit<A>[]) {
-    const edits: AutonEdit.AutonEdit<A>[] = Array.isArray(_edit)
+  public makeEdit(
+    _edit: AutonEdit.AutonEdit<A> | Array<AutonEdit.AutonEdit<A>>,
+  ) {
+    const edits: Array<AutonEdit.AutonEdit<A>> = Array.isArray(_edit)
       ? _edit
       : [_edit];
     edits.forEach((edit) => {
@@ -208,13 +225,15 @@ export default class Auton<A extends BaseAction<{}> = Action> {
       else if (AutonEdit.TypeGuards.isReplace(edit)) this.replace(edit);
       else if (AutonEdit.TypeGuards.isMove(edit)) this.move(edit);
       else {
-        //throw?
+        // throw?
       }
     });
   }
+
   getActionFromId(uuid: UUID): A | undefined {
     return this.auton.find((act) => act.uuid === uuid);
   }
+
   getIndexFromId(uuid: UUID): number {
     return this.auton.findIndex((act) => act.uuid === uuid);
   }
@@ -228,36 +247,47 @@ export default class Auton<A extends BaseAction<{}> = Action> {
   static createSetPose(params: SetPose.Params): SetPose {
     return { type: "set_pose", params, uuid: randomUUID() };
   }
+
   static createMoveTo(params: MoveTo.Params): MoveTo {
     return { type: "move_to", params, uuid: randomUUID() };
   }
+
   static createTurnTo(params: TurnTo.Params): TurnTo {
     return { type: "turn_to", params, uuid: randomUUID() };
   }
+
   static createFollow(params: Follow.Params): Follow {
     return { type: "follow", params, uuid: randomUUID() };
   }
+
   static createWait(params: Wait.Params): Wait {
     return { type: "wait", params, uuid: randomUUID() };
   }
+
   static createIntake(): Intake {
     return { type: "intake", params: {}, uuid: randomUUID() };
   }
+
   static createStopIntake(): StopIntake {
     return { type: "stop_intake", params: {}, uuid: randomUUID() };
   }
+
   static createShoot(): Shoot {
     return { type: "shoot", params: {}, uuid: randomUUID() };
   }
+
   static createPistonShoot(): PistonShoot {
     return { type: "piston_shoot", params: {}, uuid: randomUUID() };
   }
+
   static createExpand(): Expand {
     return { type: "expand", params: {}, uuid: randomUUID() };
   }
+
   static createRoller(): Roller {
     return { type: "roller", params: {}, uuid: randomUUID() };
   }
+
   /**
    * @returns a new auton starting at the origin
    */
@@ -266,28 +296,37 @@ export default class Auton<A extends BaseAction<{}> = Action> {
   }
 
   // Events
-  private _onModified = new SignalDispatcher();
-  private _onEdit = new SimpleEventDispatcher<AutonEdit.Result.AutonEdit<A>>();
-  private _onReplaceEdit = new SimpleEventDispatcher<
+  private readonly _onModified = new SignalDispatcher();
+  private readonly _onEdit = new SimpleEventDispatcher<
+    AutonEdit.Result.AutonEdit<A>
+  >();
+  private readonly _onReplaceEdit = new SimpleEventDispatcher<
     AutonEdit.Result.Replace<A>
   >();
-  private _onModifyEdit = new SimpleEventDispatcher<
+
+  private readonly _onModifyEdit = new SimpleEventDispatcher<
     AutonEdit.Result.Modify<A>
   >();
-  private _onMoveEdit = new SimpleEventDispatcher<AutonEdit.Result.Move>();
+
+  private readonly _onMoveEdit =
+    new SimpleEventDispatcher<AutonEdit.Result.Move>();
 
   public get onModified() {
     return this._onModified.asEvent();
   }
+
   public get onEdit() {
     return this._onEdit.asEvent();
   }
+
   public get onReplaceEdit() {
     return this._onReplaceEdit.asEvent();
   }
+
   public get onModifyEdit() {
     return this._onModifyEdit.asEvent();
   }
+
   public get onMoveEdit() {
     return this._onMoveEdit.asEvent();
   }
@@ -308,7 +347,7 @@ export namespace AutonEdit {
   /**
    * @warn if index is zero, 0th element of action must be {@link SetPose}
    */
-  export interface Insert<A extends BaseAction<{}>> extends Replace<A> {
+  export interface Insert<A extends BaseAction<object>> extends Replace<A> {
     // readonly type: "insert";
     readonly action: A | A[];
     readonly index: number;
@@ -317,7 +356,7 @@ export namespace AutonEdit {
   /**
    * @warn if index is zero, 0th element of action must be {@link SetPose}
    */
-  export interface Replace<A extends BaseAction<{}>> extends Base {
+  export interface Replace<A extends BaseAction<object>> extends Base {
     readonly action: A | A[];
     readonly index: number;
     /**
@@ -356,35 +395,35 @@ export namespace AutonEdit {
   /**
    * @warn if index or uuid refers to the first element and modifies params, then params must be of type Position
    */
-  export type Modify<A extends BaseAction<{}>> = {
+  export type Modify<A extends BaseAction<object>> = {
     readonly newProperties: Partial<Omit<A, "type" | "uuid">>;
   } & ({ readonly index: number } | { readonly uuid: A["uuid"] }) &
     Base;
 
-  export type AutonEdit<A extends BaseAction<{}> = Action> =
+  export type AutonEdit<A extends BaseAction<object> = Action> =
     | Replace<A>
     | Modify<A>
     | Move;
 
   export namespace Result {
-    export type Modify<A extends BaseAction<{}>> = AutonEdit.Modify<A> & {
+    export type Modify<A extends BaseAction<object>> = AutonEdit.Modify<A> & {
       readonly oldProperties: Partial<Omit<A, "type" | "uuid">>;
     };
     export type Move = AutonEdit.Move;
-    export type Replace<A extends BaseAction<{}>> = AutonEdit.Replace<A> & {
+    export type Replace<A extends BaseAction<object>> = AutonEdit.Replace<A> & {
       readonly deletedActs: A[];
     };
-    export type AutonEdit<A extends BaseAction<{}> = Action> =
+    export type AutonEdit<A extends BaseAction<object> = Action> =
       | Replace<A>
       | Modify<A>
       | Move;
   }
 
   export namespace TypeGuards {
-    function isNonNullObject(obj: unknown): obj is NonNullable<Object> {
-      return typeof obj == "object" && obj !== null;
+    function isNonNullObject(obj: unknown): obj is NonNullable<object> {
+      return typeof obj === "object" && obj !== null;
     }
-    function hasReason(obj: Object): obj is Base {
+    function hasReason(obj: object): obj is Base {
       return (
         "reason" in obj &&
         Array.isArray(obj.reason) &&

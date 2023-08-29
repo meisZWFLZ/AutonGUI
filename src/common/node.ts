@@ -1,4 +1,9 @@
-import { Coordinate, HasMarginOfError, Position, Rotatable } from "./coordinates.js";
+import {
+  Coordinate,
+  HasMarginOfError,
+  Position,
+  Rotatable,
+} from "./coordinates.js";
 
 export enum ACTION {
   SHOOT,
@@ -26,7 +31,7 @@ export enum ACTION {
 //   };
 // }
 /** @param actions must not be empty */
-export type Node = {
-  position: Position & HasMarginOfError/* | Coordinate | Rotatable */;
+export interface Node {
+  position: Position & HasMarginOfError /* | Coordinate | Rotatable */;
   actions?: ACTION[];
-};
+}

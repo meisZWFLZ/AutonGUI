@@ -21,13 +21,14 @@ export type TreeItemID =
 export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
   /* ,
     vscode.TreeDragAndDropController<TreeItemID> */
-  private _onDidChangeTreeData: vscode.EventEmitter<
+  private readonly _onDidChangeTreeData: vscode.EventEmitter<
     TreeItemID | undefined | void
   > = new vscode.EventEmitter<TreeItemID | undefined | void>();
+
   public onDidChangeTreeData: vscode.Event<TreeItemID | undefined | void> =
     this._onDidChangeTreeData.event;
 
-  private _onRefreshCommand = new SignalDispatcher();
+  private readonly _onRefreshCommand = new SignalDispatcher();
   public get onRefreshCommand() {
     return this._onRefreshCommand.asEvent();
   }
@@ -36,7 +37,7 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
     this._onDidChangeTreeData.fire();
   }
 
-  private _view: vscode.TreeView<TreeItemID>;
+  private readonly _view: vscode.TreeView<TreeItemID>;
 
   public get view() {
     return this._view;
@@ -66,7 +67,7 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
   // }
   constructor(
     protected _context: vscode.ExtensionContext /*     protected auton: Auton = Auton.newAutonAtOrigin() */,
-    private data: AutonList
+    private readonly data: AutonList,
   ) {
     this._view = vscode.window.createTreeView("vrc-auton.list-view", {
       treeDataProvider: this,
@@ -76,22 +77,23 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
     });
     _context.subscriptions.push(this._view);
     _context.subscriptions.push(
-      new vscode.Disposable(this.onRefreshCommand.sub(() => this.refresh()))
+      new vscode.Disposable(this.onRefreshCommand.sub(() => this.refresh())),
     );
 
     vscode.commands.registerCommand("vrc-auton.list-view.refresh", () =>
-      this._onRefreshCommand.dispatch()
+      this._onRefreshCommand.dispatch(),
     );
   }
+
   getTreeItem(element: TreeItemID): vscode.TreeItem {
     if (element.type === "act") {
       try {
         const actionDesc = this.data.findUUID(element.uuid);
-        if (!actionDesc) throw "uuid does not correspond to any action";
+        if (actionDesc == null) throw "uuid does not correspond to any action";
         return TreeItem.fromAction(
           actionDesc.act,
           vscode.Uri.parse(actionDesc.uri),
-          this._context
+          this._context,
         );
       } catch (e) {
         console.error(e);
@@ -100,7 +102,7 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
     } else {
       const item = new vscode.TreeItem(
         element.funcName,
-        vscode.TreeItemCollapsibleState.Expanded
+        vscode.TreeItemCollapsibleState.Expanded,
       );
       // go to
       try {
@@ -129,6 +131,7 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
   private static actToId({ uuid }: Action): TreeItemID {
     return { type: "act", uuid };
   }
+
   private static funcToId({
     uri,
     funcName,
@@ -137,16 +140,16 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
   }
 
   getChildren(
-    element?: TreeItemID | undefined
+    element?: TreeItemID | undefined,
   ): vscode.ProviderResult<TreeItemID[]> {
-    if (!element) {
+    if (element == null) {
       return this.data.getData().map(AutonTreeProvider.funcToId);
     }
     if (element.type === "func") {
       return this.data
         .getFuncAutons(element.funcName, element.uri)
         .flatMap(({ auton: { auton } }) =>
-          auton.map(AutonTreeProvider.actToId)
+          auton.map(AutonTreeProvider.actToId),
         );
     }
     return [];
@@ -154,7 +157,7 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
 
   // tree drag and drop provider
   // reference: https://github.com/microsoft/vscode-extension-samples/blob/main/tree-view-sample/src/testViewDragAndDrop.ts
-  static DROP_MIME_TYPE: string = "application/vnd.code.tree.vrc-auton";
+  static DROP_MIME_TYPE = "application/vnd.code.tree.vrc-auton";
   dropMimeTypes = [AutonTreeProvider.DROP_MIME_TYPE];
   dragMimeTypes = ["text/uri-list"];
 
@@ -227,7 +230,7 @@ export class AutonTreeProvider implements vscode.TreeDataProvider<TreeItemID> {
     if (id.type == "act") {
       try {
         const actData = this.data.findUUID(id.uuid);
-        if (!actData) throw "action with uuid not found";
+        if (actData == null) throw "action with uuid not found";
         return AutonTreeProvider.funcToId(actData);
       } catch (e) {
         console.error(e);
@@ -242,11 +245,9 @@ type RequireSome<Type, RequiredMembers extends keyof Type> = Partial<
   Omit<Type, RequiredMembers>
 > &
   Required<Pick<Type, RequiredMembers>>;
-/** function with return type T or value with type t*/
+/** function with return type T or value with type t */
 type FunctionOrT<T, FuncParam> =
-  | ((
-      ...params: FuncParam extends Array<unknown> ? FuncParam : [FuncParam]
-    ) => T)
+  | ((...params: FuncParam extends unknown[] ? FuncParam : [FuncParam]) => T)
   | T;
 
 type ActionToTreeItemMap<A extends Action> = {
@@ -255,14 +256,14 @@ type ActionToTreeItemMap<A extends Action> = {
       TreeItemProperties[K],
       [
         Extract<A, { type: P }>,
-        TreeItemProperties[K] extends vscode.Uri ? vscode.Uri : never
+        TreeItemProperties[K] extends vscode.Uri ? vscode.Uri : never,
       ]
     >;
   };
 };
 const basicActionIconPath: (act: Action, extUri: vscode.Uri) => vscode.Uri = (
   act: Action,
-  extUri: vscode.Uri
+  extUri: vscode.Uri,
 ) => vscode.Uri.joinPath(extUri, "media", "actionIcons", `${act.type}.svg`);
 
 const actionToTreeItem: ActionToTreeItemMap<Action> = {
@@ -320,7 +321,7 @@ const actionToTreeItem: ActionToTreeItemMap<Action> = {
 type TreeItemProperties = RequireSome<
   { [K in keyof vscode.TreeItem]: vscode.TreeItem[K] },
   "label"
-> & { children?: (TreeItem | TreeItemProperties)[]; id: UUID };
+> & { children?: Array<TreeItem | TreeItemProperties>; id: UUID };
 
 export class TreeItem extends vscode.TreeItem implements TreeItemProperties {
   children: TreeItem[] | undefined;
@@ -331,40 +332,40 @@ export class TreeItem extends vscode.TreeItem implements TreeItemProperties {
   public static fromAction<A extends ActionWithRanges["type"]>(
     action: Extract<ActionWithRanges, { type: A }>,
     uri: vscode.Uri,
-    context: vscode.ExtensionContext
+    context: vscode.ExtensionContext,
   ) {
     const rawTreeItemProps = actionToTreeItem[action.type as A];
     try {
-      let treeItemProps: Partial<TreeItemProperties> = { id: action.uuid };
+      const treeItemProps: Partial<TreeItemProperties> = { id: action.uuid };
       for (const property of Object.keys(rawTreeItemProps) as Array<
         keyof typeof rawTreeItemProps
       >) {
         const value = rawTreeItemProps[property];
         if (value !== undefined) {
           treeItemProps[property as keyof Omit<TreeItemProperties, "id">] =
-            typeof value == "function"
+            typeof value === "function"
               ? value(
                   action,
                   ["iconPath", "resourceUri"].includes(
-                    property as keyof Omit<TreeItemProperties, "id">
+                    property as keyof Omit<TreeItemProperties, "id">,
                   )
                     ? context.extensionUri
-                    : undefined
+                    : undefined,
                 )
               : value;
         }
       }
-        treeItemProps.command = {
-          title: "Jump to",
-          command: "vscode.open",
-          arguments: [
-            uri,
-            {
-              preserveFocus: true,
-              selection: action.range,
-            },
-          ],
-        };
+      treeItemProps.command = {
+        title: "Jump to",
+        command: "vscode.open",
+        arguments: [
+          uri,
+          {
+            preserveFocus: true,
+            selection: action.range,
+          },
+        ],
+      };
       return new TreeItem(treeItemProps as TreeItemProperties);
     } catch (e) {
       console.error(e);
@@ -396,22 +397,23 @@ export class TreeItem extends vscode.TreeItem implements TreeItemProperties {
       label,
       children === undefined
         ? vscode.TreeItemCollapsibleState.None
-        : vscode.TreeItemCollapsibleState.Expanded
+        : vscode.TreeItemCollapsibleState.Expanded,
     );
     this.children = children?.map((e) =>
-      e instanceof TreeItem ? e : new TreeItem(e)
+      e instanceof TreeItem ? e : new TreeItem(e),
     );
     this.label = label;
     this.id = id;
-    if (accessibilityInformation)
+    if (accessibilityInformation != null) {
       this.accessibilityInformation = accessibilityInformation;
+    }
     if (collapsibleState) this.collapsibleState = collapsibleState;
-    if (command) this.command = command;
+    if (command != null) this.command = command;
     if (contextValue) this.contextValue = contextValue;
     if (description) this.description = description;
     if (iconPath) this.iconPath = iconPath;
     if (id) this.id = id;
-    if (resourceUri) this.resourceUri = resourceUri;
+    if (resourceUri != null) this.resourceUri = resourceUri;
     if (tooltip) this.tooltip = tooltip;
   }
 }

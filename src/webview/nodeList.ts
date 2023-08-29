@@ -30,20 +30,20 @@ export default class NodeList extends EventList<MyNode> {
               }
             }
             return getVal(k2) - getVal(k1);
-          })
+          }),
         ) as Position & HasMarginOfError,
         actions: node.actions,
       };
     });
   }
 
-  public update(content?: MyNode[], edits?: ListAction<MyNode>[]) {
+  public update(content?: MyNode[], edits?: Array<ListAction<MyNode>>) {
     // console.log("edits", edits, "arr", this.startList);
-    if (content) {
+    if (content != null) {
       this.setList(content);
       this.startList = structuredClone(content);
     } else this.setList(structuredClone(this.startList));
-    for (const edit of edits || []) this.performNewAction(edit);
+    for (const edit of edits != null || []) this.performNewAction(edit);
     // console.log("result", this);
   }
 }
