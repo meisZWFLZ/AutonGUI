@@ -47,23 +47,22 @@ export interface ClangdAPI {
 
 export class ASTTranslator {
   /** converts {@link RawASTNode.range range} to {@link vscode.Range}  */
-  private static upgradeRawNode<Param extends RawASTNode | undefined | null>(
+  private static upgradeRawNode<Param extends RawASTNode>(
     rawNode: Param,
   ): ASTNode & Param {
-    return (
-      rawNode != null && {
-        ...rawNode,
-        children: rawNode.children?.map(this.upgradeRawNode.bind(this)),
-        range:
-          rawNode.range != null &&
-          new vscode.Range(
-            rawNode.range.start.line,
-            rawNode.range.start.character,
-            rawNode.range.end.line,
-            rawNode.range.end.character,
-          ),
-      }
-    );
+    return {
+      ...rawNode,
+      children: rawNode.children?.map(this.upgradeRawNode.bind(this)),
+      range:
+        rawNode.range == null
+          ? undefined
+          : new vscode.Range(
+              rawNode.range.start.line,
+              rawNode.range.start.character,
+              rawNode.range.end.line,
+              rawNode.range.end.character,
+            ),
+    };
   }
 
   private static async getAST(
@@ -74,7 +73,9 @@ export class ASTTranslator {
       "llvm-vs-code-extensions.vscode-clangd",
     );
     if (clangd == undefined) throw "clangd not yet activated";
-    return this.upgradeRawNode(await clangd.exports.retrieveAst(range, uri));
+    const astNode = await clangd.exports.retrieveAst(range, uri);
+    if (astNode == null) return astNode;
+    return this.upgradeRawNode(astNode);
   }
 
   /** gets all function declaration nodes that are part of the autons namespace */
@@ -114,8 +115,8 @@ export class ASTTranslator {
           (call): call is CallExprASTNode =>
             call.kind === "Call" &&
             call.role === "expression" &&
-            !(call.children == null),
-        ) != null || []
+            call.children != undefined,
+        ) ?? []
     );
   }
 
