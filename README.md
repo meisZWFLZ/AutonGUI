@@ -1,73 +1,62 @@
 # Auton Builder for Vex Robotics Competition
 
-A graphical editor for vrc autons.
-
-### _**Deprecated:**_ This documentation refers to an [older release](https://github.com/meisZWFLZ/AutonGUI/releases/tag/v0.0.2-pre-alpha).
-
-![Auton Editor Example](documentation/example.png)
+A graphical aid for creating for vrc autons as a vscode extension.
 
 ## What it does
 
-This extension allows programmers to easily create and modify autons in the form of a .vauton (json) file. This file can then be downloaded onto an Micro SD card and interpreted by the program on the robot.
+This extension provides a visualization of an auton written in cpp (and maybe a graphical way to edit it).
+![Demo of the auton builder](documentation/example-demo.png)
 
-> _**Note:**_ This extension does not handle how the auton will be performed, it only provides the information that comprises the auton.
+### Understood Actions:
+Many of these are lemlib `chassis::*()` methods
+- SetPose(x, y, theta, radians)
+- MoveTo(x, y, timeout, maxSpeed, log)
+- TurnTo(x,y, timeout, reversed, maxSpeed, log)
+- Follow(filePath, timeout, lookahead, reverse, maxSpeed, log)†
+- Wait(milliseconds)†
+- Intake†
+- StopIntake†
+- Shoot†
+- PistonShoot†
+- Roller†
+- Expand†
 
-## Use
+--- 
+† *This is partially implemented, meaning that the list view understands it, but the webview does not understand it*
 
-- Interface
-  - Robot - Represents state of the robot at the current auton node
-    - Margin of error (red circle) - indicates the range robot will try to get to before moving onto the next node
-  - Field - VRC Spin Up Field
-  - Action Bar - Represents actions that robot will perform at the current auton node
-    - Intake
-    - Shoot
-    - Piston Shoot
-    - Roller
-    - Expand
-  - Node Index - shows index of current node (top right)
-- Controls
-  - Movement
-    - Left Click & Drag - Move the robot around
-    - Arrow Keys / WASD - Move the robot around
-    - Left Click + Alt - Rotate robot towards mouse pointer
-    - R - Rotate robot 90 degrees (can be modified with shift)
-    - C - Rotate robot to a heading of 0
-  - Margin Of Error
-    - Left Click & Drag - Modify margin of error
-  - Node Management
-    - J - Go to previous node
-    - L - Go to next node
-    - N - Create new node after this node
-    - Delete - remove current note
-      > _**Note:**_ Keybindings cannot be modified
+## How it works
+
+This extension makes use of the [vscode clangd extension](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd) to provide AST information 
+(This is not yet implemented natively by this extension and instead requires a [modified version](https://github.com/meisZWFLZ/vscode-clangd-expose-ast) of it)
+
+This AST is then translated into ["Actions"](./src/common/action.ts), a list of which is represented by an [Auton](./src/common/auton.ts).
+
+This auton is then displayed as a list view in the activity bar. This list view can be used to select an action from the list to be displayed in the auton preview. (The list view might also be used to change the order of the actions)
+
+The auton/action preview shows the user what an action does to the robot, by displaying the robot's position on the field (and perhaps modifying the look of the robot). (This might also be used to modify the cpp and maybe display motion from one action to another)
+
+## What's missing
+- All of the above is implemented, except for the parenthesized statements
+- Configure displayed field (for different games and for skills vs matchplay)
+- Configure robot dimensions
+- Adding custom actions
+- Deep Scanning functions, eg:
+  ```cpp
+  void turnTowardGoal() {
+    auton::turnTo(64,64,1500);
+  }
+  void autons::shootIntoGoal() {
+    turnTowardGoal(); // look into this function and find turnTo()
+    auton::shoot();
+  }
+- Configure auton and autons namespaces
+- Native lemlib `follow()` viewing
+- Display partially understood actions in webview 
+- Update actions to be similar to new lemlib version
+- Expose AST API in clangd 
 
 ## Installation
+Visit [CONTRIBUTING.md](CONTRIBUTING.md) for installation instructions
 
-1. Go To the desired release ([0.0.2-pre-alpha](https://github.com/meisZWFLZ/AutonGUI/releases/tag/v0.0.2-pre-alpha)) and download the .vsix file
-2. Install using any of the below methods
-   - Open the folder containing the .vsix file in VS Code. Then right click on the .vsix and select `Install Extension VSIX`.
-   - In VS Code run the `Extensions: Install from VSIX...` command.
-   - In a terminal, run the following command  
-      `code --install-extension /path/to/file/vrc-auton-0.0.1.vsix`
-
-## Auton Data Structure
-
-The .vauton file that this extension creates is just a .json file. This json is an array of auton nodes each containing an position value and an array of actions
-
-- Auton Node
-  - `"position": Position & HasMarginOfError` - Represents the position the robot will go to.
-    - `"x": number` - x coordinate in inches, 0 to 144. 0 being closest to the blue driver station and 144 being closest to the red driver station.
-    - `"y": number` - y coordinate in inches, 0 to 144. 0 being closest to the audience and 144 being closest to the referees.
-    - `"heading": number` - heading in degrees, 0 to 360. 0 being facing towards the audience and 90 facing the red driver station
-    - `"marginOfError": number` - margin of error in inches, positive float. Acceptable distance from target point for robot to go onto the next node.
-  - `"actions": ACTION[]` - unique array of enumerators representing the actions to be performed when the robot reaches `position`.
-    - `ACTION.SHOOT = 0`
-    - `ACTION.PISTON_SHOOT = 1`
-    - `ACTION.INTAKE = 2`
-    - `ACTION.ROLLER = 3`
-    - `ACTION.EXPAND = 4`
-
-## Known Bugs
-
-- Creating an empty .vauton file doesn't work
-  - Fix: copy an existing, working .vauton file and rename it
+## Contributing
+Any contributions you'd like to make would be greatly appreciated and instructions on how to do so are present in [CONTRIBUTING.md](CONTRIBUTING.md)
