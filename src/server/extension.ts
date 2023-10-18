@@ -1,7 +1,4 @@
 import * as vscode from "vscode";
-// import { CatScratchEditorProvider } from './catScratchEditor';
-import { AutonEditorProvider } from "./autonEditor";
-import { AutonTreeProvider } from "./autonTreeView";
 import { Conductor } from "./conductor";
 
 export function activate(context: vscode.ExtensionContext) {
