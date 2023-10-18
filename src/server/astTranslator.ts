@@ -1,6 +1,5 @@
 import * as vscode from "vscode";
-import { Translation } from "./translator";
-import { Action, SetPose } from "../common/action";
+import { Action } from "../common/action";
 import Auton, { AutonEdit, AutonData } from "../common/auton";
 import { randomUUID } from "crypto";
 
