@@ -58,5 +58,8 @@ The auton/action preview shows the user what an action does to the robot, by dis
 ## Installation
 Visit [CONTRIBUTING.md](CONTRIBUTING.md) for installation instructions
 
+## Example Workspace 
+To see what an example workspace looks like, check out the [example branch](https://github.com/meisZWFLZ/AutonGUI/tree/example)
+
 ## Contributing
 Any contributions you'd like to make would be greatly appreciated and instructions on how to do so are present in [CONTRIBUTING.md](CONTRIBUTING.md)
