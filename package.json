@@ -175,7 +175,7 @@
   },
   "devDependencies": {
     "@types/node": "^16.11.7",
-    "@types/uuid": "^9.0.1",
+    "@types/uuid": "^9.0.6",
     "@types/vscode": "^1.73.0",
     "@typescript-eslint/eslint-plugin": "^5.42.0",
     "@typescript-eslint/parser": "^5.62.0",
@@ -189,6 +189,6 @@
   },
   "dependencies": {
     "strongly-typed-events": "^3.0.9",
-    "uuid": "^9.0.0"
+    "uuid": "^9.0.1"
   }
 }
